@@ -1,0 +1,21 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: postgres
+  password: <%= ENV.fetch("DB_PASSWORD", "12345") %>
+  host: localhost
+
+development:
+  <<: *default
+  database: mindforce_attendance_development
+
+test:
+  <<: *default
+  database: mindforce_attendance_test
+
+production:
+  <<: *default
+  database: mindforce_attendance_production
+  username: <%= ENV["DB_USERNAME"] %>
+  password: <%= ENV["DB_PASSWORD"] %>
