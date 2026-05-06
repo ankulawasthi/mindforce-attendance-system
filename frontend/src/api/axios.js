@@ -1,13 +1,13 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true'
   }
 })
 
-// Add token to every request automatically
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -16,7 +16,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 errors globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
