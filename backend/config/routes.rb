@@ -19,6 +19,7 @@ Rails.application.routes.draw do
           post :clock_in
           post :clock_out
           get  :today
+          get  :export
         end
       end
 

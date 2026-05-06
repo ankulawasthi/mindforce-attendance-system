@@ -146,6 +146,23 @@ export default function EmployeeDashboard() {
 
   const checkedIn  = !!attendance?.clock_in
   const checkedOut = !!attendance?.clock_out
+const exportAttendance = async () => {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch('http://localhost:3000/api/v1/attendances/export', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const blob = await res.blob()
+    const url  = window.URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `my_attendance_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    showMsg('Failed to export', 'error')
+  }
+}
 
   const handleChangePassword = () => {
     setActiveTab('password')
@@ -468,7 +485,10 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
         {/* HISTORY */}
         {activeTab === 'history' && (
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Attendance History</h3>
+            <div style={styles.cardHeader}>
+  <h3 style={styles.cardTitle}>Attendance History</h3>
+  <button onClick={exportAttendance} style={styles.addBtn}>⬇ Export CSV</button>
+</div>
             <table style={styles.table}>
               <thead>
                 <tr style={styles.thead}>

@@ -83,6 +83,24 @@ export default function DirectorDashboard() {
   const checkedIn  = !!attendance?.clock_in
   const checkedOut = !!attendance?.clock_out
 
+  const exportAttendance = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('http://localhost:3000/api/v1/attendances/export', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const blob = await res.blob()
+      const url  = window.URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `all_attendance_${new Date().toISOString().slice(0,10)}.csv`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export failed', err)
+    }
+  }
+
   const handleChangePassword = () => {
     setActiveTab('password')
     setShowProfile(false)
@@ -202,7 +220,10 @@ export default function DirectorDashboard() {
                 </ResponsiveContainer>
               </div>
               <div style={{ ...styles.card, width: '280px' }}>
-                <h3 style={styles.cardTitle}>Today's Attendance</h3>
+              <div style={styles.cardHeader}>
+  <h3 style={styles.cardTitle}>Today's Attendance — All Departments</h3>
+  <button onClick={exportAttendance} style={styles.addBtn}>⬇ Export CSV</button>
+</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label>

@@ -12,6 +12,7 @@ const SIDEBAR_LINKS = [
 ]
 
 export default function ManagerDashboard() {
+  const [editUser, setEditUser] = useState(null) //for editing user
   const { user, logout }              = useAuth()
   const [activeTab, setActiveTab]     = useState('overview')
   const [showProfile, setShowProfile] = useState(false)
@@ -115,6 +116,22 @@ export default function ManagerDashboard() {
       fetchAll()
     } catch (err) { showMsg(err.response?.data?.error || 'Error', 'error') }
   }
+  
+  const handleEditUser = async (e) => {
+    e.preventDefault()
+    try {
+      await api.patch(`/users/${editUser.id}`, { user: {
+        name:        editUser.name,
+        email:       editUser.email,
+        job_title:   editUser.job_title,
+        employee_id: editUser.employee_id,
+        joined_at:   editUser.joined_at,
+      }})
+      showMsg('✅ Employee updated!')
+      setEditUser(null)
+      fetchAll()
+    } catch (err) { showMsg(err.response?.data?.errors?.join(', ') || 'Error', 'error') }
+  }
   const submitLeave = async (e) => {
     e.preventDefault()
     try {
@@ -131,6 +148,24 @@ export default function ManagerDashboard() {
 
   const checkedIn  = !!attendance?.clock_in
   const checkedOut = !!attendance?.clock_out
+
+  const exportAttendance = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('http://localhost:3000/api/v1/attendances/export', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const blob = await res.blob()
+      const url  = window.URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `department_attendance_${new Date().toISOString().slice(0,10)}.csv`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      showMsg('Failed to export', 'error')
+    }
+  }
 
   const handleChangePassword = () => {
     setActiveTab('password')
@@ -152,9 +187,9 @@ export default function ManagerDashboard() {
     }
   }
 
-  const chartData = employees.slice(0, 8).map(e => {
+  const chartData = employees.map(e => {
     const present = todayAll.find(a => a.user_id === e.id)
-    return { name: e.name.split(' ')[0], present: present ? 1 : 0 }
+    return { name: e.name.trim().split(' ')[0], present: present ? 1 : 0 }
   })
 
   const msgStyle = {
@@ -254,7 +289,10 @@ export default function ManagerDashboard() {
 
         {activeTab === 'attendance' && (
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Today's Attendance</h3>
+            <div style={styles.cardHeader}>
+  <h3 style={styles.cardTitle}>Today's Attendance</h3>
+  <button onClick={exportAttendance} style={styles.addBtn}>⬇ Export CSV</button>
+</div>
             <table style={styles.table}>
               <thead>
                 <tr style={styles.thead}>
@@ -323,6 +361,48 @@ export default function ManagerDashboard() {
             </table>
           </div>
         )}
+        {editUser && (
+  <div style={styles.editModal}>
+    <div style={styles.editModalBox}>
+      <div style={styles.editModalHeader}>
+        <h3 style={{margin:0, fontSize:'16px', fontWeight:'600'}}>Edit Employee</h3>
+        <button onClick={() => setEditUser(null)} style={styles.closeBtn}>✕</button>
+      </div>
+      <form onSubmit={handleEditUser}>
+        <div style={styles.formField}>
+          <label style={styles.formLabel}>Full Name</label>
+          <input style={styles.formInput} value={editUser.name}
+            onChange={e => setEditUser({...editUser, name: e.target.value})} />
+        </div>
+        <div style={styles.formField}>
+          <label style={styles.formLabel}>Email</label>
+          <input style={styles.formInput} type="email" value={editUser.email}
+            onChange={e => setEditUser({...editUser, email: e.target.value})} />
+        </div>
+        <div style={styles.formField}>
+          <label style={styles.formLabel}>Job Title</label>
+          <input style={styles.formInput} value={editUser.job_title || ''}
+            onChange={e => setEditUser({...editUser, job_title: e.target.value})} />
+        </div>
+        <div style={styles.formField}>
+          <label style={styles.formLabel}>Employee ID</label>
+          <input style={styles.formInput} value={editUser.employee_id || ''}
+            onChange={e => setEditUser({...editUser, employee_id: e.target.value})} />
+        </div>
+        <div style={styles.formField}>
+          <label style={styles.formLabel}>Joining Date</label>
+          <input style={styles.formInput} type="date" value={editUser.joined_at || ''}
+            onChange={e => setEditUser({...editUser, joined_at: e.target.value})} />
+        </div>
+        <div style={{display:'flex', gap:'8px', marginTop:'1rem'}}>
+          <button type="submit" style={styles.submitBtn}>Save Changes</button>
+          <button type="button" onClick={() => setEditUser(null)}
+            style={{...styles.submitBtn, background:'#f0f0f0', color:'#333'}}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
         {activeTab === 'employees' && (
           <div style={styles.card}>
@@ -390,7 +470,10 @@ export default function ManagerDashboard() {
                       </span>
                     </td>
                     <td style={styles.td}>
-                      {e.is_active && <button onClick={() => handleDeactivate(e.id)} style={styles.deactivateBtn}>Deactivate</button>}
+                    <div style={{display:'flex', gap:'6px'}}>
+  <button onClick={() => setEditUser(e)} style={styles.editBtn}>Edit</button>
+  {e.is_active && <button onClick={() => handleDeactivate(e.id)} style={styles.deactivateBtn}>Deactivate</button>}
+</div>
                     </td>
                   </tr>
                 ))}
