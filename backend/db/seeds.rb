@@ -22,6 +22,7 @@ anupam = User.create!(
   email:       "anupam@mindforce.com",
   password:    "password123",
   role:        :director,
+  employee_id: "10116",
   is_active:   true,
   joined_at:   Date.new(2020, 1, 1)
 )
@@ -35,6 +36,7 @@ shikha = User.create!(
   password:      "password123",
   role:          :manager,
   department_id: operations.id,
+  employee_id: "10305",
   is_active:     true,
   joined_at:     Date.new(2020, 3, 1)
 )
@@ -45,6 +47,7 @@ vineet = User.create!(
   password:      "password123",
   role:          :manager,
   department_id: data_quality.id,
+  employee_id: "10195",
   is_active:     true,
   joined_at:     Date.new(2020, 3, 1)
 )
@@ -55,6 +58,7 @@ mohit = User.create!(
   password:      "password123",
   role:          :manager,
   department_id: client_services.id,
+  employee_id: "10104",
   is_active:     true,
   joined_at:     Date.new(2020, 3, 1)
 )
@@ -64,6 +68,7 @@ kapil = User.create!(
   email:         "kapil@mindforce.com",
   password:      "password123",
   role:          :manager,
+  employee_id: "10253",
   department_id: online_sample.id,
   is_active:     true,
   joined_at:     Date.new(2020, 3, 1)
@@ -74,6 +79,7 @@ rajendra = User.create!(
   email:         "rajendra@mindforce.com",
   password:      "password123",
   role:          :manager,
+  employee_id: "10461",
   department_id: programming_dp.id,
   is_active:     true,
   joined_at:     Date.new(2020, 3, 1)
