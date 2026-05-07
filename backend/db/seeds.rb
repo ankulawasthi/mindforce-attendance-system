@@ -98,18 +98,19 @@ puts "✅ Managers assigned to departments"
 
 # Create sample employees
 [
-  { name: "Employee 1",  email: "emp1@mindforce.com",  department_id: operations.id },
-  { name: "Employee 2",  email: "emp2@mindforce.com",  department_id: operations.id },
-  { name: "Employee 3",  email: "emp3@mindforce.com",  department_id: data_quality.id },
-  { name: "Employee 4",  email: "emp4@mindforce.com",  department_id: client_services.id },
-  { name: "Employee 5",  email: "emp5@mindforce.com",  department_id: online_sample.id },
-  { name: "Employee 6",  email: "emp6@mindforce.com",  department_id: programming_dp.id },
+  { name: "Employee 1", email: "emp1@mindforce.com", department_id: operations.id,      employee_id: "EMP0001" },
+  { name: "Employee 2", email: "emp2@mindforce.com", department_id: operations.id,      employee_id: "EMP0002" },
+  { name: "Employee 3", email: "emp3@mindforce.com", department_id: data_quality.id,    employee_id: "EMP0003" },
+  { name: "Employee 4", email: "emp4@mindforce.com", department_id: client_services.id, employee_id: "EMP0004" },
+  { name: "Employee 5", email: "emp5@mindforce.com", department_id: online_sample.id,   employee_id: "EMP0005" },
+  { name: "Employee 6", email: "emp6@mindforce.com", department_id: programming_dp.id,  employee_id: "EMP0006" },
 ].each do |emp|
   User.create!(
     name:          emp[:name],
     email:         emp[:email],
     password:      "password123",
     role:          :employee,
+    employee_id:   emp[:employee_id],
     department_id: emp[:department_id],
     is_active:     true,
     joined_at:     Date.new(2021, 6, 1)
