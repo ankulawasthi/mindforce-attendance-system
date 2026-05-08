@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import LeaveCard from '../../components/LeaveCard'
+import LeaveTabs from '../../components/LeaveTabs'
+import LeaveTable from '../../components/LeaveTable'
 
 const SIDEBAR_LINKS = [
   { key: 'overview',   label: 'Overview',        icon: '🏠' },
@@ -28,6 +31,7 @@ export default function ManagerDashboard() {
   //leave apply req 
   const [myLeaves, setMyLeaves]           = useState([])
   const [showLeaveForm, setShowLeaveForm] = useState(false)
+  const [leavePanel, setLeavePanel] = useState('summary')
   const [leaveForm, setLeaveForm]         = useState({ leave_type:'casual', leave_slot:'full_day', from_date:'', to_date:'', reason:'' })
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -41,6 +45,28 @@ export default function ManagerDashboard() {
     setMessage({ text, type })
     setTimeout(() => setMessage({ text:'', type:'success' }), 4000)
   }
+
+  const leaveSummaryData = {
+    planned: { available: '8.21', booked: 1 },
+    unplanned: { available: '1.5', booked: 0 },
+  }
+
+  const upcomingLeaves = [
+    { id: 1, date: '15-Aug-2026, Saturday', event: 'Independence Day' },
+    { id: 2, date: '28-Aug-2026, Friday', event: 'Raksha Bandhan' },
+    { id: 3, date: '02-Oct-2026, Wednesday', event: 'Gandhi Jayanti' },
+    { id: 4, date: '25-Dec-2026, Saturday', event: 'Christmas Day' },
+  ]
+
+  const leaveBalanceRows = [
+    { id: 1, label: 'Planned Leave', total: '12.00', used: '3.79', remaining: '8.21' },
+    { id: 2, label: 'Unplanned Leave', total: '3.00', used: '1.50', remaining: '1.50' },
+  ]
+
+  const leaveRequestsRows = myLeaves.length > 0 ? myLeaves : [
+    { id: 1, leave_type: 'casual', leave_slot: 'full_day', from_date: '10-Jul-2026', to_date: '10-Jul-2026', status: 'approved' },
+    { id: 2, leave_type: 'sick', leave_slot: 'half_day', from_date: '05-Jun-2026', to_date: '05-Jun-2026', status: 'pending' },
+  ]
 
   const fetchAll = async () => {
     try {
@@ -483,137 +509,157 @@ export default function ManagerDashboard() {
         )}
 
         {activeTab === 'leaves' && (
-  <div>
-    {/* Manager's own leave */}
-    <div style={styles.card}>
-      <div style={styles.cardHeader}>
-        <h3 style={styles.cardTitle}>My Leave Requests</h3>
-        <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.addBtn}>+ Apply Leave</button>
-      </div>
+          <div style={styles.leaveSection}>
+            <div style={styles.leaveHeader}>
+              <div>
+                <p style={styles.leaveHeadline}>
+                  Leave booked this year: <span style={styles.leaveHeadlineStrong}>1 day(s)</span>
+                  <span style={styles.leaveHeadlineDivider}>|</span>
+                  Absent: <span style={styles.leaveHeadlineStrong}>0</span>
+                </p>
+              </div>
+              <div style={styles.leaveHeaderActions}>
+                <div style={styles.dateRange}>01-Apr-2026 - 31-Mar-2027</div>
+                <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+              </div>
+            </div>
 
-      {showLeaveForm && (
-        <form onSubmit={submitLeave} style={styles.leaveForm}>
-          <div style={styles.formRow}>
-            <div style={styles.formField}>
-              <label style={styles.formLabel}>Leave Type</label>
-              <select style={styles.formInput} value={leaveForm.leave_type}
-                onChange={e => setLeaveForm({...leaveForm, leave_type: e.target.value})}>
-                <option value="casual">Casual</option>
-                <option value="sick">Sick</option>
-                <option value="earned">Earned</option>
-                <option value="unpaid">Unpaid</option>
-              </select>
-            </div>
-            <div style={styles.formField}>
-              <label style={styles.formLabel}>Duration</label>
-              <select style={styles.formInput} value={leaveForm.leave_slot}
-                onChange={e => setLeaveForm({...leaveForm, leave_slot: e.target.value})}>
-                <option value="full_day">Full Day</option>
-                <option value="first_half">First Half (Sunrise)</option>
-                <option value="second_half">Second Half (Sunset)</option>
-              </select>
-            </div>
-            <div style={styles.formField}>
-              <label style={styles.formLabel}>From Date</label>
-              <input style={styles.formInput} type="date" required value={leaveForm.from_date}
-                onChange={e => setLeaveForm({...leaveForm, from_date: e.target.value})} />
-            </div>
-            <div style={styles.formField}>
-              <label style={styles.formLabel}>To Date</label>
-              <input style={styles.formInput} type="date" required
-                disabled={leaveForm.leave_slot !== 'full_day'}
-                value={leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : leaveForm.from_date}
-                onChange={e => setLeaveForm({...leaveForm, to_date: e.target.value})} />
-            </div>
-          </div>
-          <div style={styles.formField}>
-            <label style={styles.formLabel}>Reason</label>
-            <textarea style={{...styles.formInput, height:'70px', resize:'none'}}
-              value={leaveForm.reason}
-              onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})} />
-          </div>
-          <button type="submit" style={styles.submitBtn}>Submit</button>
-        </form>
-      )}
+            <LeaveTabs
+              tabs={[
+                { key: 'summary', label: 'Leave Summary' },
+                { key: 'balance', label: 'Leave Balance' },
+                { key: 'requests', label: 'Leave Requests' },
+              ]}
+              activeTab={leavePanel}
+              onChange={setLeavePanel}
+            />
 
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.thead}>
-            <th style={styles.th}>Type</th>
-            <th style={styles.th}>Duration</th>
-            <th style={styles.th}>From</th>
-            <th style={styles.th}>To</th>
-            <th style={styles.th}>Reason</th>
-            <th style={styles.th}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {myLeaves.map(l => (
-            <tr key={l.id} style={styles.tr}>
-              <td style={styles.td}>{l.leave_type}</td>
-              <td style={styles.td}>
-                <span style={{...styles.badge, background:'#e6f1fb', color:'#0C447C'}}>
-                  {l.leave_slot === 'half_day' ? 'Half Day' : 'Full Day'}
-                </span>
-              </td>
-              <td style={styles.td}>{l.from_date}</td>
-              <td style={styles.td}>{l.to_date}</td>
-              <td style={styles.td}>{l.reason}</td>
-              <td style={styles.td}>
-                <span style={{...styles.badge,
-                  background: l.status==='approved'?'#e1f5ee':l.status==='rejected'?'#fff0f0':'#fff9e6',
-                  color: l.status==='approved'?'#085041':l.status==='rejected'?'#e53e3e':'#b7791f'
-                }}>{l.status}</span>
-              </td>
-            </tr>
-          ))}
-          {myLeaves.length === 0 && <tr><td colSpan={6} style={{...styles.td, color:'#888', textAlign:'center'}}>No leave requests yet</td></tr>}
-        </tbody>
-      </table>
-    </div>
-
-    {/* Department pending leaves */}
-    <div style={styles.card}>
-      <h3 style={styles.cardTitle}>Pending Leave Requests</h3>
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.thead}>
-            <th style={styles.th}>Employee</th>
-            <th style={styles.th}>Type</th>
-            <th style={styles.th}>Duration</th>
-            <th style={styles.th}>From</th>
-            <th style={styles.th}>To</th>
-            <th style={styles.th}>Reason</th>
-            <th style={styles.th}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leaves.map(l => (
-            <tr key={l.id} style={styles.tr}>
-              <td style={styles.td}>{l.user_name}</td>
-              <td style={styles.td}>{l.leave_type}</td>
-              <td style={styles.td}>
-                <span style={{...styles.badge, background:'#e6f1fb', color:'#0C447C'}}>
-                  {l.leave_slot === 'half_day' ? 'Half Day' : 'Full Day'}
-                </span>
-              </td>
-              <td style={styles.td}>{l.from_date}</td>
-              <td style={styles.td}>{l.to_date}</td>
-              <td style={styles.td}>{l.reason}</td>
-              <td style={styles.td}>
-                <div style={{display:'flex', gap:'6px'}}>
-                  <button onClick={() => handleLeave(l.id, 'approve')} style={styles.approveBtn}>Approve</button>
-                  <button onClick={() => handleLeave(l.id, 'reject')} style={styles.rejectBtn}>Reject</button>
+            {leavePanel === 'summary' && (
+              <>
+                <div style={styles.leaveCardsRow}>
+                  <LeaveCard variant="planned" title="Planned Leave" available={leaveSummaryData.planned.available} booked={leaveSummaryData.planned.booked} />
+                  <LeaveCard variant="unplanned" title="Unplanned Leave" available={leaveSummaryData.unplanned.available} booked={leaveSummaryData.unplanned.booked} />
                 </div>
-              </td>
-            </tr>
-          ))}
-          {leaves.length === 0 && <tr><td colSpan={7} style={{...styles.td, color:'#888', textAlign:'center'}}>No pending requests</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+                <LeaveTable rows={upcomingLeaves} />
+              </>
+            )}
+
+            {leavePanel === 'balance' && (
+              <div style={styles.leaveBalanceGrid}>
+                {leaveBalanceRows.map(row => (
+                  <div key={row.id} style={styles.balanceCard}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <p style={styles.balanceTitle}>{row.label}</p>
+                      <span style={styles.balanceBadge}>Balance</span>
+                    </div>
+                    <div style={styles.balanceMetrics}>
+                      <div>
+                        <p style={styles.balanceLabel}>Total</p>
+                        <p style={styles.balanceValue}>{row.total}</p>
+                      </div>
+                      <div>
+                        <p style={styles.balanceLabel}>Used</p>
+                        <p style={styles.balanceValue}>{row.used}</p>
+                      </div>
+                      <div>
+                        <p style={styles.balanceLabel}>Remaining</p>
+                        <p style={styles.balanceValue}>{row.remaining}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {leavePanel === 'requests' && (
+              <div style={styles.requestsSection}>
+                <div style={styles.requestsHeader}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#102a43' }}>My Leave Requests</h3>
+                    <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Track your requests and status here.</p>
+                  </div>
+                  <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+                </div>
+
+                {showLeaveForm && (
+                  <form onSubmit={submitLeave} style={styles.leaveForm}>
+                    <div style={styles.formRow}>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Leave Type</label>
+                        <select style={styles.formInput} value={leaveForm.leave_type}
+                          onChange={e => setLeaveForm({...leaveForm, leave_type: e.target.value})}>
+                          <option value="casual">Casual</option>
+                          <option value="sick">Sick</option>
+                          <option value="earned">Earned</option>
+                          <option value="unpaid">Unpaid</option>
+                        </select>
+                      </div>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Duration</label>
+                        <select style={styles.formInput} value={leaveForm.leave_slot}
+                          onChange={e => setLeaveForm({...leaveForm, leave_slot: e.target.value})}>
+                          <option value="full_day">Full Day</option>
+                          <option value="first_half">First Half</option>
+                          <option value="second_half">Second Half</option>
+                        </select>
+                      </div>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>From Date</label>
+                        <input style={styles.formInput} type="date" required value={leaveForm.from_date}
+                          onChange={e => setLeaveForm({...leaveForm, from_date: e.target.value})} />
+                      </div>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>To Date</label>
+                        <input style={styles.formInput} type="date" required
+                          disabled={leaveForm.leave_slot !== 'full_day'}
+                          value={leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : leaveForm.from_date}
+                          onChange={e => setLeaveForm({...leaveForm, to_date: e.target.value})} />
+                      </div>
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Reason</label>
+                      <textarea style={{...styles.formInput, height:'70px', resize:'none'}}
+                        value={leaveForm.reason}
+                        onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})} />
+                    </div>
+                    <button type="submit" style={styles.submitBtn}>Submit</button>
+                  </form>
+                )}
+
+                <div style={{ overflowX:'auto', marginTop:'1rem', background:'#fff', borderRadius:'20px', padding:'1rem', boxShadow:'0 18px 45px rgba(15,23,42,0.08)' }}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr style={styles.thead}>
+                        <th style={styles.th}>Type</th>
+                        <th style={styles.th}>Duration</th>
+                        <th style={styles.th}>From</th>
+                        <th style={styles.th}>To</th>
+                        <th style={styles.th}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaveRequestsRows.map(request => (
+                        <tr key={request.id} style={styles.tr}>
+                          <td style={styles.td}>{request.leave_type}</td>
+                          <td style={styles.td}>{request.leave_slot === 'half_day' ? 'Half Day' : 'Full Day'}</td>
+                          <td style={styles.td}>{request.from_date}</td>
+                          <td style={styles.td}>{request.to_date}</td>
+                          <td style={styles.td}>
+                            <span style={{...styles.badge,
+                              background: request.status === 'approved' ? '#e1f5ee' : request.status === 'rejected' ? '#fff0f0' : '#fff9e6',
+                              color: request.status === 'approved' ? '#085041' : request.status === 'rejected' ? '#e53e3e' : '#b7791f'
+                            }}>{request.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {leaveRequestsRows.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No requests yet</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === 'password' && (
           <div style={styles.card}>
@@ -709,6 +755,22 @@ const styles = {
   cardTitle:     { margin:'0 0 1rem', fontSize:'17px', fontWeight:'600', color:'#1a1a2e' },
   cardHeader:    { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' },
   addBtn:        { padding:'8px 16px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'13px', fontWeight:'600' },
+  leaveSection:  { background:'#fff', padding:'1.75rem', borderRadius:'24px', boxShadow:'0 22px 50px rgba(15,23,42,0.08)', marginTop:'1rem' },
+  leaveHeader:   { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1rem', flexWrap:'wrap', marginBottom:'1.5rem' },
+  leaveHeadline: { margin:0, fontSize:'15px', color:'#475569', lineHeight:'1.6' },
+  leaveHeadlineStrong: { fontWeight:700, color:'#0f172a' },
+  leaveHeadlineDivider: { margin:'0 0.75rem', color:'#cbd5e1' },
+  leaveHeaderActions: { display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' },
+  dateRange:     { padding:'8px 12px', background:'#f1f5f9', borderRadius:'999px', fontSize:'13px', color:'#475569' },
+  applyLeaveBtn: { padding:'10px 18px', background:'linear-gradient(135deg,#4f46e5,#8b5cf6)', color:'#fff', border:'none', borderRadius:'999px', cursor:'pointer', fontSize:'13px', fontWeight:'600', boxShadow:'0 14px 28px rgba(79,70,229,0.18)' },
+  leaveCardsRow: { display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'1rem', marginBottom:'1.5rem' },
+  leaveBalanceGrid:{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:'1rem' },
+  balanceCard:   { background:'#fff', border:'1px solid #e2e8f0', borderRadius:'18px', padding:'1.25rem', boxShadow:'0 12px 28px rgba(15,23,42,0.06)' },
+  balanceTitle:  { margin:0, fontSize:'14px', fontWeight:'700', color:'#102a43' },
+  balanceBadge:  { padding:'4px 10px', background:'#eef2ff', borderRadius:'999px', fontSize:'11px', fontWeight:'700', color:'#4338ca' },
+  balanceMetrics:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'1rem' },
+  requestsSection:{ background:'#f8fafc', borderRadius:'24px', padding:'1.5rem', boxShadow:'0 20px 40px rgba(15,23,42,0.05)' },
+  requestsHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1rem', marginBottom:'1.25rem', flexWrap:'wrap' },
   table:         { width:'100%', borderCollapse:'collapse' },
   thead:         { background:'#f8f9fa' },
   th:            { padding:'10px 14px', textAlign:'left', fontSize:'12px', fontWeight:'600', color:'#555', borderBottom:'1px solid #eee' },
