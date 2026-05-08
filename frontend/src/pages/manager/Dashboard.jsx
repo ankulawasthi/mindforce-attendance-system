@@ -517,7 +517,7 @@ export default function ManagerDashboard() {
                         <div style={styles.formField}>
                           <label style={styles.formLabel}>Type</label>
                           <select style={styles.formInput} value={leaveForm.leave_type} onChange={e => setLeaveForm({ ...leaveForm, leave_type: e.target.value })}>
-                            <option value="casual">Casual</option><option value="sick">Sick</option>
+                            <option value="casual">Planned</option><option value="sick">Unplanned</option>
                           </select>
                         </div>
                         <div style={styles.formField}>
