@@ -232,14 +232,15 @@ export default function ManagerDashboard() {
   }
 
   return (
-    <style dangerouslySetInnerHTML={{__html: `
-      @keyframes shimmer {
-        0% { background-position: -200px 0; }
-        100% { background-position: 200px 0; }
-      }
-    `}} />
-    <div style={styles.layout}>
-      <div style={styles.sidebar}>
+    <>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes shimmer {
+          0% { background-position: -200px 0; }
+          100% { background-position: 200px 0; }
+        }
+      `}} />
+      <div style={styles.layout}>
+        <div style={styles.sidebar}>
         <div style={styles.sidebarTop}>
           <div style={styles.sidebarTitle}>
             <span style={{ fontSize:'20px' }}>🎯</span>
