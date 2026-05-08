@@ -38,6 +38,9 @@ export default function ManagerDashboard() {
     new_password: '',
     confirm_password: '',
   })
+  const [hoveredRow, setHoveredRow] = useState(null)
+  const [hoveredApplyBtn, setHoveredApplyBtn] = useState(false)
+  const [loadingLeaves, setLoadingLeaves] = useState(true)
 
   useEffect(() => { fetchAll(); fetchMyLeaves() }, [])
 
@@ -88,12 +91,16 @@ export default function ManagerDashboard() {
 
   //chnage leave status   
   const fetchMyLeaves = async () => {
+    setLoadingLeaves(true)
     try {
       const res = await api.get('/leave_requests')
       const all = res.data
       setMyLeaves(all.filter(l => l.user_id === user.id))
       setLeaves(all.filter(l => l.user_id !== user.id && l.status === 'pending'))
-    } catch (err) { console.error(err) }
+    } catch (err) { console.error(err) } finally {
+      setLoadingLeaves(false)
+    }
+  }
   }
 
   const handleCheckIn = async () => {
@@ -225,6 +232,12 @@ export default function ManagerDashboard() {
   }
 
   return (
+    <style dangerouslySetInnerHTML={{__html: `
+      @keyframes shimmer {
+        0% { background-position: -200px 0; }
+        100% { background-position: 200px 0; }
+      }
+    `}} />
     <div style={styles.layout}>
       <div style={styles.sidebar}>
         <div style={styles.sidebarTop}>
@@ -520,7 +533,7 @@ export default function ManagerDashboard() {
               </div>
               <div style={styles.leaveHeaderActions}>
                 <div style={styles.dateRange}>01-Apr-2026 - 31-Mar-2027</div>
-                <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+                <button style={{...styles.applyLeaveBtn, transform: hoveredApplyBtn ? 'scale(1.05)' : 'scale(1)'}} onMouseEnter={() => setHoveredApplyBtn(true)} onMouseLeave={() => setHoveredApplyBtn(false)} onClick={() => setShowLeaveForm(true)}><span>+</span>Apply Leave</button>
               </div>
             </div>
 
@@ -578,7 +591,7 @@ export default function ManagerDashboard() {
                     <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#102a43' }}>My Leave Requests</h3>
                     <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Track your requests and status here.</p>
                   </div>
-                  <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+                  <button style={{...styles.applyLeaveBtn, transform: hoveredApplyBtn ? 'scale(1.05)' : 'scale(1)'}} onMouseEnter={() => setHoveredApplyBtn(true)} onMouseLeave={() => setHoveredApplyBtn(false)} onClick={() => setShowLeaveForm(true)}><span>+</span>Apply Leave</button>
                 </div>
 
                 {showLeaveForm && (
@@ -627,6 +640,7 @@ export default function ManagerDashboard() {
                 )}
 
                 <div style={{ overflowX:'auto', marginTop:'1rem', background:'#fff', borderRadius:'20px', padding:'1rem', boxShadow:'0 18px 45px rgba(15,23,42,0.08)' }}>
+                  {loadingLeaves && <p style={{ margin: 0, paddingBottom: '1rem', color: '#64748b', fontSize: '14px' }}>Loading leave requests...</p>}
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
@@ -638,21 +652,33 @@ export default function ManagerDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {leaveRequestsRows.map(request => (
-                        <tr key={request.id} style={styles.tr}>
-                          <td style={styles.td}>{request.leave_type}</td>
-                          <td style={styles.td}>{request.leave_slot === 'half_day' ? 'Half Day' : 'Full Day'}</td>
-                          <td style={styles.td}>{request.from_date}</td>
-                          <td style={styles.td}>{request.to_date}</td>
-                          <td style={styles.td}>
-                            <span style={{...styles.badge,
-                              background: request.status === 'approved' ? '#e1f5ee' : request.status === 'rejected' ? '#fff0f0' : '#fff9e6',
-                              color: request.status === 'approved' ? '#085041' : request.status === 'rejected' ? '#e53e3e' : '#b7791f'
-                            }}>{request.status}</span>
-                          </td>
-                        </tr>
-                      ))}
-                      {leaveRequestsRows.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No requests yet</td></tr>}
+                      {loadingLeaves ? (
+                        [1,2,3].map(i => (
+                          <tr key={i} style={styles.tr}>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                          </tr>
+                        ))
+                      ) : (
+                        leaveRequestsRows.map(request => (
+                          <tr key={request.id} style={{...styles.tr, backgroundColor: hoveredRow === request.id ? '#f9fafb' : 'transparent'}} onMouseEnter={() => setHoveredRow(request.id)} onMouseLeave={() => setHoveredRow(null)}>
+                            <td style={styles.td}>{request.leave_type}</td>
+                            <td style={styles.td}>{request.leave_slot === 'half_day' ? 'Half Day' : 'Full Day'}</td>
+                            <td style={styles.td}>{request.from_date}</td>
+                            <td style={styles.td}>{request.to_date}</td>
+                            <td style={styles.td}>
+                              <span style={{...styles.badge,
+                                background: request.status === 'approved' ? '#e1f5ee' : request.status === 'rejected' ? '#fff0f0' : '#fff9e6',
+                                color: request.status === 'approved' ? '#085041' : request.status === 'rejected' ? '#e53e3e' : '#b7791f'
+                              }}>{request.status}</span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                      {!loadingLeaves && leaveRequestsRows.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No requests yet</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -732,58 +758,58 @@ const styles = {
   doneBtn:       { width:'100%', padding:'11px', background:'rgba(29,158,117,0.15)', color:'#1D9E75', border:'1px solid rgba(29,158,117,0.3)', borderRadius:'8px', fontSize:'13px', fontWeight:'600', textAlign:'center' },
   logoutBtn:     { width:'100%', padding:'11px', background:'rgba(229,62,62,0.1)', color:'#ff6b6b', border:'1px solid rgba(229,62,62,0.2)', borderRadius:'8px', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
   // 
-  main:          { flex:1, padding:'2rem', overflowY:'auto' },
-  topBar:        { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
-  welcome:       { fontSize:'24px', fontWeight:'700', marginBottom:'1.5rem', color:'#1a1a2e' },
+  main:          { flex:1, padding:'2.5rem', overflowY:'auto' },
+  topBar:        { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2.5rem', padding:'1rem 0' },
+  welcome:       { fontSize:'32px', fontWeight:'800', margin:'0', color:'#1a1a2e', letterSpacing:'-0.025em' },
   profileWrap:      { position:'relative' },
-  profileAvatarBtn: { width:'40px', height:'40px', borderRadius:'50%', border:'none', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', fontWeight:'700', fontSize:'15px', cursor:'pointer', boxShadow:'0 4px 12px rgba(83,74,183,0.35)' },
-  profileCard:      { position:'absolute', top:'48px', right:0, width:'250px', background:'#fff', border:'1px solid #e6ebf2', borderRadius:'12px', padding:'12px', boxShadow:'0 10px 28px rgba(30,41,59,0.18)', zIndex:20 },
-  profileHeader:    { display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px' },
-  profileAvatarLarge:{ width:'38px', height:'38px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'700' },
-  profileName:      { margin:0, fontSize:'14px', fontWeight:'700', color:'#1a1a2e' },
-  profileRole:      { margin:0, fontSize:'11px', color:'#64748b', textTransform:'capitalize' },
-  profileEmail:     { margin:0, fontSize:'12px', color:'#334155', wordBreak:'break-all' },
-  profileActions:   { marginTop:'10px', display:'grid', gap:'6px' },
-  profileBtn:       { width:'100%', padding:'8px 10px', borderRadius:'8px', border:'1px solid #d7e3f4', background:'#f8fbff', color:'#2d6bcf', fontSize:'12px', fontWeight:'600', cursor:'pointer' },
-  profileBtnDanger: { width:'100%', padding:'8px 10px', borderRadius:'8px', border:'1px solid #ffd8d8', background:'#fff5f5', color:'#e53e3e', fontSize:'12px', fontWeight:'600', cursor:'pointer' },
-  msgBox:        { padding:'10px 16px', borderRadius:'8px', marginBottom:'1rem', fontSize:'14px' },
-  statsRow:      { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1.5rem' },
-  statCard:      { background:'#fff', padding:'1.25rem', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', textAlign:'center' },
-  statNum:       { margin:'0 0 4px', fontSize:'28px', fontWeight:'700', color:'#2d6bcf' },
-  statLabel:     { margin:0, color:'#888', fontSize:'12px' },
-  card:          { background:'#fff', padding:'1.5rem', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', marginBottom:'1.5rem' },
-  cardTitle:     { margin:'0 0 1rem', fontSize:'17px', fontWeight:'600', color:'#1a1a2e' },
-  cardHeader:    { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' },
-  addBtn:        { padding:'8px 16px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'13px', fontWeight:'600' },
-  leaveSection:  { background:'#fff', padding:'1.75rem', borderRadius:'24px', boxShadow:'0 22px 50px rgba(15,23,42,0.08)', marginTop:'1rem' },
-  leaveHeader:   { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1rem', flexWrap:'wrap', marginBottom:'1.5rem' },
-  leaveHeadline: { margin:0, fontSize:'15px', color:'#475569', lineHeight:'1.6' },
-  leaveHeadlineStrong: { fontWeight:700, color:'#0f172a' },
+  profileAvatarBtn: { width:'44px', height:'44px', borderRadius:'50%', border:'none', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', fontWeight:'700', fontSize:'16px', cursor:'pointer', boxShadow:'0 4px 12px rgba(83,74,183,0.35)' },
+  profileCard:      { position:'absolute', top:'52px', right:0, width:'280px', background:'#fff', border:'1px solid #e6ebf2', borderRadius:'16px', padding:'16px', boxShadow:'0 10px 28px rgba(30,41,59,0.18)', zIndex:20 },
+  profileHeader:    { display:'flex', alignItems:'center', gap:'12px', marginBottom:'10px' },
+  profileAvatarLarge:{ width:'42px', height:'42px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'700', fontSize:'16px' },
+  profileName:      { margin:0, fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
+  profileRole:      { margin:0, fontSize:'12px', color:'#64748b', textTransform:'capitalize' },
+  profileEmail:     { margin:0, fontSize:'13px', color:'#334155', wordBreak:'break-all' },
+  profileActions:   { marginTop:'12px', display:'grid', gap:'8px' },
+  profileBtn:       { width:'100%', padding:'10px 12px', borderRadius:'10px', border:'1px solid #d7e3f4', background:'#f8fbff', color:'#2d6bcf', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
+  profileBtnDanger: { width:'100%', padding:'10px 12px', borderRadius:'10px', border:'1px solid #ffd8d8', background:'#fff5f5', color:'#e53e3e', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
+  msgBox:        { padding:'12px 18px', borderRadius:'12px', marginBottom:'1.5rem', fontSize:'14px', fontWeight:'500' },
+  statsRow:      { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1.25rem', marginBottom:'2rem' },
+  statCard:      { background:'#fff', padding:'1.75rem', borderRadius:'16px', boxShadow:'0 4px 16px rgba(0,0,0,0.08)', textAlign:'center', transition:'transform 0.2s ease, box-shadow 0.2s ease' },
+  statNum:       { margin:'0 0 6px', fontSize:'32px', fontWeight:'800', color:'#2d6bcf', lineHeight:'1.2' },
+  statLabel:     { margin:0, color:'#64748b', fontSize:'13px', fontWeight:'500', textTransform:'uppercase', letterSpacing:'0.05em' },
+  card:          { background:'#fff', padding:'2rem', borderRadius:'16px', boxShadow:'0 4px 16px rgba(0,0,0,0.08)', marginBottom:'2rem' },
+  cardTitle:     { margin:'0 0 1.5rem', fontSize:'20px', fontWeight:'700', color:'#1a1a2e', letterSpacing:'-0.025em' },
+  cardHeader:    { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
+  addBtn:        { padding:'10px 18px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'10px', cursor:'pointer', fontSize:'13px', fontWeight:'600', transition:'all 0.2s ease' },
+  leaveSection:  { background:'#fff', padding:'2.25rem', borderRadius:'24px', boxShadow:'0 22px 50px rgba(15,23,42,0.08)', marginTop:'1.5rem' },
+  leaveHeader:   { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1.25rem', flexWrap:'wrap', marginBottom:'2rem' },
+  leaveHeadline: { margin:0, fontSize:'16px', color:'#475569', lineHeight:'1.6', fontWeight:'500' },
+  leaveHeadlineStrong: { fontWeight:'700', color:'#0f172a' },
   leaveHeadlineDivider: { margin:'0 0.75rem', color:'#cbd5e1' },
   leaveHeaderActions: { display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' },
-  dateRange:     { padding:'8px 12px', background:'#f1f5f9', borderRadius:'999px', fontSize:'13px', color:'#475569' },
-  applyLeaveBtn: { padding:'10px 18px', background:'linear-gradient(135deg,#4f46e5,#8b5cf6)', color:'#fff', border:'none', borderRadius:'999px', cursor:'pointer', fontSize:'13px', fontWeight:'600', boxShadow:'0 14px 28px rgba(79,70,229,0.18)' },
-  leaveCardsRow: { display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'1rem', marginBottom:'1.5rem' },
-  leaveBalanceGrid:{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:'1rem' },
-  balanceCard:   { background:'#fff', border:'1px solid #e2e8f0', borderRadius:'18px', padding:'1.25rem', boxShadow:'0 12px 28px rgba(15,23,42,0.06)' },
-  balanceTitle:  { margin:0, fontSize:'14px', fontWeight:'700', color:'#102a43' },
-  balanceBadge:  { padding:'4px 10px', background:'#eef2ff', borderRadius:'999px', fontSize:'11px', fontWeight:'700', color:'#4338ca' },
+  dateRange:     { padding:'10px 14px', background:'#f1f5f9', borderRadius:'999px', fontSize:'13px', color:'#475569', fontWeight:'500' },
+  applyLeaveBtn: { padding:'12px 20px', background:'linear-gradient(135deg,#4f46e5,#8b5cf6)', color:'#fff', border:'none', borderRadius:'999px', cursor:'pointer', fontSize:'13px', fontWeight:'600', boxShadow:'0 14px 28px rgba(79,70,229,0.18)', transition:'all 0.2s ease', display:'flex', alignItems:'center', gap:'6px' },
+  leaveCardsRow: { display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'1.25rem', marginBottom:'2rem' },
+  leaveBalanceGrid:{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:'1.25rem' },
+  balanceCard:   { background:'#fff', border:'1px solid #e2e8f0', borderRadius:'20px', padding:'1.5rem', boxShadow:'0 12px 28px rgba(15,23,42,0.06)' },
+  balanceTitle:  { margin:0, fontSize:'15px', fontWeight:'700', color:'#102a43' },
+  balanceBadge:  { padding:'5px 12px', background:'#eef2ff', borderRadius:'999px', fontSize:'11px', fontWeight:'700', color:'#4338ca' },
   balanceMetrics:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'1rem' },
-  requestsSection:{ background:'#f8fafc', borderRadius:'24px', padding:'1.5rem', boxShadow:'0 20px 40px rgba(15,23,42,0.05)' },
-  requestsHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1rem', marginBottom:'1.25rem', flexWrap:'wrap' },
-  table:         { width:'100%', borderCollapse:'collapse' },
-  thead:         { background:'#f8f9fa' },
-  th:            { padding:'10px 14px', textAlign:'left', fontSize:'12px', fontWeight:'600', color:'#555', borderBottom:'1px solid #eee' },
-  tr:            { borderBottom:'1px solid #f0f0f0' },
-  td:            { padding:'10px 14px', fontSize:'13px', color:'#333' },
-  badge:         { padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500' },
-  leaveForm:     { background:'#f8f9fa', padding:'1.25rem', borderRadius:'10px', marginBottom:'1.5rem' },
-  formRow:       { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1rem' },
-  formField:     { marginBottom:'0.75rem' },
-  formLabel:     { display:'block', fontSize:'12px', fontWeight:'500', color:'#555', marginBottom:'4px' },
-  formInput:     { width:'100%', padding:'8px 12px', border:'1.5px solid #e2e8f0', borderRadius:'8px', fontSize:'13px', outline:'none', boxSizing:'border-box' },
-  submitBtn:     { padding:'10px 24px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'14px', fontWeight:'600' },
-  approveBtn:    { padding:'5px 12px', background:'#1D9E75', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'12px' },
-  rejectBtn:     { padding:'5px 12px', background:'#e53e3e', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'12px' },
-  deactivateBtn: { padding:'5px 12px', background:'#e53e3e', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'12px' },
+  requestsSection:{ background:'#f8fafc', borderRadius:'24px', padding:'2rem', boxShadow:'0 20px 40px rgba(15,23,42,0.05)' },
+  requestsHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1.25rem', marginBottom:'1.5rem', flexWrap:'wrap' },
+  table:         { width:'100%', borderCollapse:'collapse', borderRadius:'16px', overflow:'hidden', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' },
+  thead:         { background:'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' },
+  th:            { padding:'14px 18px', textAlign:'left', fontSize:'13px', fontWeight:'600', color:'#374151', borderBottom:'2px solid #d1d5db' },
+  tr:            { borderBottom:'1px solid #f3f4f6', transition:'background-color 0.15s ease' },
+  td:            { padding:'14px 18px', fontSize:'14px', color:'#374151' },
+  badge:         { padding:'5px 14px', borderRadius:'999px', fontSize:'11px', fontWeight:'500', textTransform:'capitalize' },
+  leaveForm:     { background:'#f8f9fa', padding:'1.5rem', borderRadius:'12px', marginBottom:'2rem' },
+  formRow:       { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1.25rem', marginBottom:'1.25rem' },
+  formField:     { marginBottom:'1rem' },
+  formLabel:     { display:'block', fontSize:'13px', fontWeight:'500', color:'#374151', marginBottom:'6px' },
+  formInput:     { width:'100%', padding:'10px 14px', border:'1.5px solid #e2e8f0', borderRadius:'10px', fontSize:'14px', outline:'none', boxSizing:'border-box', transition:'border-color 0.2s ease' },
+  submitBtn:     { padding:'12px 28px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'10px', cursor:'pointer', fontSize:'14px', fontWeight:'600', transition:'all 0.2s ease' },
+  approveBtn:    { padding:'6px 14px', background:'#1D9E75', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'12px', fontWeight:'500' },
+  rejectBtn:     { padding:'6px 14px', background:'#e53e3e', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'12px', fontWeight:'500' },
+  deactivateBtn: { padding:'6px 14px', background:'#e53e3e', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'12px', fontWeight:'500' },
 }

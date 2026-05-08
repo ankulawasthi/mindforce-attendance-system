@@ -32,7 +32,10 @@ export default function EmployeeDashboard() {
   const [message, setMessage]         = useState({ text: '', type: 'success' })
   const [showLeaveForm, setShowLeaveForm] = useState(false)
   const [leavePanel, setLeavePanel] = useState('summary')
-  const [leaveForm, setLeaveForm]     = useState({ leave_type: 'casual', leave_slot: 'full_day', from_date: '', to_date: '', reason: '' })
+  const [leaveForm, setLeaveForm]     = useState({ leave_type: 'casual', from_date: '', to_date: '', reason: '' })
+  const [loadingLeaves, setLoadingLeaves] = useState(true)
+  const [hoveredRow, setHoveredRow] = useState(null)
+  const [hoveredApplyBtn, setHoveredApplyBtn] = useState(false)
   const [now, setNow]                 = useState(new Date())
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -79,10 +82,13 @@ export default function EmployeeDashboard() {
   }
 
   const fetchLeaves = async () => {
+    setLoadingLeaves(true)
     try {
       const res = await api.get('/leave_requests')
-      setLeaves(res.data)
-    } catch (err) { console.error(err) }
+      setLeaves(res.data.filter(l => l.user_id === user.id))
+    } catch (err) { console.error(err) } finally {
+      setLoadingLeaves(false)
+    }
   }
 
   const handleCheckIn = async () => {
@@ -123,10 +129,7 @@ export default function EmployeeDashboard() {
     { id: 2, title: 'Unplanned Leave', total: '3.00', used: '1.50', remaining: '1.50' },
   ]
 
-  const leaveRequestsRows = leaves.length > 0 ? leaves : [
-    { id: 1, type: 'Casual', duration: 'Full Day', from_date: '10-Jul-2026', to_date: '10-Jul-2026', status: 'approved' },
-    { id: 2, type: 'Sick', duration: 'Half Day', from_date: '05-Jun-2026', to_date: '05-Jun-2026', status: 'pending' },
-  ]
+  const leaveRequestsRows = leaves
 
   const startBreak = async (breakType) => {
     setLoading(true)
@@ -159,13 +162,10 @@ export default function EmployeeDashboard() {
   const submitLeave = async (e) => {
     e.preventDefault()
     try {
-      const payload = leaveForm.leave_slot === 'full_day'
-        ? leaveForm
-        : { ...leaveForm, to_date: leaveForm.from_date }
-      await api.post('/leave_requests', { leave_request: payload })
+      await api.post('/leave_requests', { leave_request: leaveForm })
       showMsg('✅ Leave request submitted!')
       setShowLeaveForm(false)
-      setLeaveForm({ leave_type: 'casual', leave_slot: 'full_day', from_date: '', to_date: '', reason: '' })
+      setLeaveForm({ leave_type: 'casual', from_date: '', to_date: '', reason: '' })
       fetchLeaves()
     } catch (err) { showMsg(err.response?.data?.error || 'Error', 'error') }
   }
@@ -245,6 +245,12 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
   }
 
   return (
+    <style dangerouslySetInnerHTML={{__html: `
+      @keyframes shimmer {
+        0% { background-position: -200px 0; }
+        100% { background-position: 200px 0; }
+      }
+    `}} />
     <div style={styles.layout}>
       {/* Sidebar */}
       <div style={styles.sidebar}>
@@ -555,7 +561,7 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
 
               <div style={styles.leaveHeaderActions}>
                 <div style={styles.dateRange}>01-Apr-2026 - 31-Mar-2027</div>
-                <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+                <button style={{...styles.applyLeaveBtn, transform: hoveredApplyBtn ? 'scale(1.05)' : 'scale(1)'}} onMouseEnter={() => setHoveredApplyBtn(true)} onMouseLeave={() => setHoveredApplyBtn(false)} onClick={() => setShowLeaveForm(true)}><span>+</span>Apply Leave</button>
               </div>
             </div>
 
@@ -610,10 +616,10 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
               <div style={styles.requestsSection}>
                 <div style={styles.requestsHeader}>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#102a43' }}>Leave Requests</h3>
-                    <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Track requests, status, and action history.</p>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#102a43' }}>My Leave Requests</h3>
+                    <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '14px' }}>Track your requests and status here.</p>
                   </div>
-                  <button style={styles.applyLeaveBtn} onClick={() => setShowLeaveForm(true)}>Apply Leave</button>
+                  <button style={{...styles.applyLeaveBtn, transform: hoveredApplyBtn ? 'scale(1.05)' : 'scale(1)'}} onMouseEnter={() => setHoveredApplyBtn(true)} onMouseLeave={() => setHoveredApplyBtn(false)} onClick={() => setShowLeaveForm(true)}><span>+</span>Apply Leave</button>
                 </div>
 
                 {showLeaveForm && (
@@ -630,36 +636,14 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
                         </select>
                       </div>
                       <div style={styles.formField}>
-                        <label style={styles.formLabel}>Duration</label>
-                        <select
-                          style={styles.formInput}
-                          value={leaveForm.leave_slot}
-                          onChange={e => setLeaveForm({ ...leaveForm, leave_slot: e.target.value })}
-                        >
-                          <option value="full_day">Full Day</option>
-                          <option value="first_half">First Half</option>
-                          <option value="second_half">Second Half</option>
-                        </select>
-                      </div>
-                      <div style={styles.formField}>
-                        <label style={styles.formLabel}>From</label>
+                        <label style={styles.formLabel}>From Date</label>
                         <input style={styles.formInput} type="date" required value={leaveForm.from_date}
-                          onChange={e => setLeaveForm({
-                            ...leaveForm,
-                            from_date: e.target.value,
-                            to_date: leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : e.target.value,
-                          })} />
+                          onChange={e => setLeaveForm({...leaveForm, from_date: e.target.value})} />
                       </div>
                       <div style={styles.formField}>
-                        <label style={styles.formLabel}>To</label>
-                        <input
-                          style={styles.formInput}
-                          type="date"
-                          required
-                          disabled={leaveForm.leave_slot !== 'full_day'}
-                          value={leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : leaveForm.from_date}
-                          onChange={e => setLeaveForm({ ...leaveForm, to_date: e.target.value })}
-                        />
+                        <label style={styles.formLabel}>To Date</label>
+                        <input style={styles.formInput} type="date" required value={leaveForm.to_date}
+                          onChange={e => setLeaveForm({ ...leaveForm, to_date: e.target.value })} />
                       </div>
                     </div>
                     <div style={styles.formField}>
@@ -667,14 +651,15 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
                       <textarea style={{ ...styles.formInput, height: '80px', resize: 'none' }} value={leaveForm.reason}
                         onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
                     </div>
-                    <button type="submit" style={styles.submitBtn}>Submit Request</button>
+                    <button type="submit" style={styles.submitBtn}>Submit</button>
                   </form>
                 )}
 
-                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: '20px', padding: '1rem', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                <div style={{ overflowX:'auto', marginTop:'1rem', background:'#fff', borderRadius:'20px', padding:'1rem', boxShadow:'0 18px 45px rgba(15,23,42,0.08)' }}>
+                  {loadingLeaves && <p style={{ margin: 0, paddingBottom: '1rem', color: '#64748b', fontSize: '14px' }}>Loading leave requests...</p>}
+                  <table style={styles.table}>
                     <thead>
-                      <tr>
+                      <tr style={styles.thead}>
                         <th style={styles.th}>Type</th>
                         <th style={styles.th}>Duration</th>
                         <th style={styles.th}>From</th>
@@ -683,23 +668,33 @@ const liveWorkHrs = attendance?.clock_in && !attendance?.clock_out
                       </tr>
                     </thead>
                     <tbody>
-                      {leaveRequestsRows.map(request => (
-                        <tr key={request.id} style={styles.tr}>
-                          <td style={styles.td}>{request.type}</td>
-                          <td style={styles.td}>{request.duration}</td>
-                          <td style={styles.td}>{request.from_date}</td>
-                          <td style={styles.td}>{request.to_date}</td>
-                          <td style={styles.td}>
-                            <span style={{
-                              ...styles.badge,
-                              background: request.status === 'approved' ? '#e1f5ee' : request.status === 'rejected' ? '#fff0f0' : '#fff9e6',
-                              color: request.status === 'approved' ? '#085041' : request.status === 'rejected' ? '#e53e3e' : '#b7791f',
-                            }}>
-                              {request.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {loadingLeaves ? (
+                        [1,2,3].map(i => (
+                          <tr key={i} style={styles.tr}>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                            <td style={{...styles.td, background: 'linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%)', backgroundSize: '200px 100%', animation: 'shimmer 1.5s infinite'}}></td>
+                          </tr>
+                        ))
+                      ) : (
+                        leaveRequestsRows.map(request => (
+                          <tr key={request.id} style={{...styles.tr, backgroundColor: hoveredRow === request.id ? '#f9fafb' : 'transparent'}} onMouseEnter={() => setHoveredRow(request.id)} onMouseLeave={() => setHoveredRow(null)}>
+                            <td style={styles.td}>{request.leave_type}</td>
+                            <td style={styles.td}>Full Day</td>
+                            <td style={styles.td}>{request.from_date}</td>
+                            <td style={styles.td}>{request.to_date}</td>
+                            <td style={styles.td}>
+                              <span style={{...styles.badge,
+                                background: request.status === 'approved' ? '#e1f5ee' : request.status === 'rejected' ? '#fff0f0' : '#fff9e6',
+                                color: request.status === 'approved' ? '#085041' : request.status === 'rejected' ? '#e53e3e' : '#b7791f'
+                              }}>{request.status}</span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                      {!loadingLeaves && leaveRequestsRows.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No leave requests yet</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -817,26 +812,26 @@ const styles = {
   cardTitle:       { margin:'0 0 1rem', fontSize:'17px', fontWeight:'600', color:'#1a1a2e' },
   cardHeader:      { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' },
   addBtn:          { padding:'8px 16px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'13px', fontWeight:'600' },
-  table:           { width:'100%', borderCollapse:'collapse' },
-  thead:           { background:'#f8f9fa' },
+  table:           { width:'100%', borderCollapse:'collapse', borderRadius:'12px', overflow:'hidden', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' },
+  thead:           { background:'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' },
   th:              { padding:'10px 14px', textAlign:'left', fontSize:'12px', fontWeight:'600', color:'#555', borderBottom:'1px solid #eee' },
-  tr:              { borderBottom:'1px solid #f0f0f0' },
+  tr:              { borderBottom:'1px solid #f0f0f0', transition:'background-color 0.15s ease' },
   td:              { padding:'10px 14px', fontSize:'13px', color:'#333' },
-  badge:           { padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500' },
+  badge:           { padding:'4px 12px', borderRadius:'999px', fontSize:'11px', fontWeight:'500', textTransform:'capitalize' },
   leaveForm:       { background:'#f8f9fa', padding:'1.25rem', borderRadius:'10px', marginBottom:'1.5rem' },
   formRow:         { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1rem' },
   formField:       { marginBottom:'0.75rem' },
   formLabel:       { display:'block', fontSize:'12px', fontWeight:'500', color:'#555', marginBottom:'4px' },
   formInput:       { width:'100%', padding:'8px 12px', border:'1.5px solid #e2e8f0', borderRadius:'8px', fontSize:'13px', outline:'none', boxSizing:'border-box' },
   submitBtn:       { padding:'10px 24px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'14px', fontWeight:'600' },
-  leaveSection:    { background:'#f5f7fb', padding:'1.75rem', borderRadius:'24px', boxShadow:'0 24px 70px rgba(15, 23, 42, 0.08)', marginBottom:'1.5rem' },
+  leaveSection:    { background:'#fff', padding:'1.75rem', borderRadius:'24px', boxShadow:'0 24px 70px rgba(15, 23, 42, 0.08)', marginBottom:'1.5rem' },
   leaveHeader:     { display:'flex', justifyContent:'space-between', alignItems:'center', gap:'1rem', flexWrap:'wrap', marginBottom:'1.5rem' },
   leaveHeadline:   { margin:0, fontSize:'14px', color:'#475569', lineHeight:1.5 },
   leaveHeadlineStrong: { color:'#102a43', fontWeight:700 },
   leaveHeadlineDivider: { margin:'0 0.75rem', color:'#d1d5db' },
   leaveHeaderActions:{ display:'flex', gap:'0.75rem', flexWrap:'wrap', alignItems:'center' },
   dateRange:       { padding:'10px 14px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:'999px', color:'#475569', fontSize:'13px', minWidth:'230px' },
-  applyLeaveBtn:   { padding:'10px 18px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'999px', fontWeight:700, cursor:'pointer', boxShadow:'0 12px 24px rgba(45, 107, 207, 0.18)' },
+  applyLeaveBtn:   { padding:'10px 18px', background:'linear-gradient(135deg,#4f46e5,#8b5cf6)', color:'#fff', border:'none', borderRadius:'999px', fontWeight:700, cursor:'pointer', boxShadow:'0 12px 24px rgba(45, 107, 207, 0.18)', transition:'all 0.2s ease', display:'flex', alignItems:'center', gap:'6px' },
   leaveCardsRow:   { display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'1rem', marginBottom:'1.5rem' },
   leaveBalanceGrid:{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'1rem', marginBottom:'1.5rem' },
   balanceCard:     { background:'#fff', borderRadius:'20px', padding:'1.5rem', boxShadow:'0 18px 45px rgba(15, 23, 42, 0.08)' },
