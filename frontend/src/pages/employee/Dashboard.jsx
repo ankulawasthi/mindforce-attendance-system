@@ -2,23 +2,29 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import mfrLogo from '../../assets/mfr-logo.png'
 
-const SIDEBAR_LINKS = [
-  { key: 'overview', label: 'Overview',       icon: '🏠' },
-  { key: 'breaks',   label: 'Break Tracking', icon: '☕' },
-  { key: 'history',  label: 'History',        icon: '🕐' },
-  { key: 'leaves',   label: 'Leave Requests', icon: '📋' },
+const NAV_LINKS = [
+  { key: 'overview',  label: 'Home',         icon: '🏠' },
+  { key: 'history',   label: 'Attendance',    icon: '📅' },
+  { key: 'bookings', label: 'Meeting Rooms', icon: '🏢' },
+  { key: 'leaves',    label: 'Leave Tracker', icon: '🏖️' },
+  { key: 'breaks',    label: 'Time Tracker',  icon: '⏱️' },
+  
 ]
 
 const BREAK_TYPES = [
-  { value: 'lunch',    label: '🍽️ Lunch',      max: 45, maxCount: 1    },
-  { value: 'short',    label: '☕ Short Break', max: 15, maxCount: 2    },
-  { value: 'personal', label: '🚶 Personal',    max: null, maxCount: null },
+  { value: 'lunch',    label: '🍽️ Lunch' },
+  { value: 'short',    label: '☕ Short Break' },
+  { value: 'personal', label: '🚶 Personal' },
 ]
 
 export default function EmployeeDashboard() {
+  const [userProfile, setUserProfile] = useState(null)
   const { user, logout }                  = useAuth()
   const [activeTab, setActiveTab]         = useState('overview')
+  const [hoveredTab, setHoveredTab]       = useState(null)
+  const [isLogoutHovered, setIsLogoutHovered] = useState(false)
   const [showProfile, setShowProfile]     = useState(false)
   const [attendance, setAttendance]       = useState(null)
   const [breaks, setBreaks]               = useState([])
@@ -29,6 +35,14 @@ export default function EmployeeDashboard() {
   const [message, setMessage]             = useState({ text: '', type: 'success' })
   const [showLeaveForm, setShowLeaveForm] = useState(false)
   const [leaveForm, setLeaveForm]         = useState({ leave_type: 'casual', leave_slot: 'full_day', from_date: '', to_date: '', reason: '' })
+  const [rooms, setRooms]                 = useState([])
+  const [bookings, setBookings]           = useState([])
+  const [selectedRoomId, setSelectedRoomId] = useState(null)
+  const [bookingDate, setBookingDate]     = useState(new Date().toISOString().slice(0,10))
+  const [startTime, setStartTime]         = useState('09:00')
+  const [endTime, setEndTime]             = useState('10:00')
+  const [purpose, setPurpose]             = useState('Team sync')
+  const [bookingLoading, setBookingLoading] = useState(false)
   const [now, setNow]                     = useState(new Date())
   const [passwordForm, setPasswordForm]   = useState({ current_password: '', new_password: '', confirm_password: '' })
 
@@ -37,7 +51,8 @@ export default function EmployeeDashboard() {
     return () => clearInterval(timer)
   }, [])
 
-  useEffect(() => { fetchToday(); fetchHistory(); fetchLeaves() }, [])
+  useEffect(() => { fetchToday(); fetchHistory(); fetchLeaves(); fetchProfile() }, [])
+  useEffect(() => { if (activeTab === 'bookings') { fetchRooms(); fetchBookings() } }, [bookingDate, activeTab])
 
   const showMsg = (text, type = 'success') => {
     setMessage({ text, type })
@@ -75,6 +90,13 @@ export default function EmployeeDashboard() {
     } catch (err) { console.error(err) }
   }
 
+  const fetchProfile = async () => {
+  try {
+    const res = await api.get('/auth/me')
+    setUserProfile(res.data)
+  } catch (err) { console.error(err) }
+}
+
   const handleCheckIn = async () => {
     setLoading(true)
     try {
@@ -104,7 +126,6 @@ export default function EmployeeDashboard() {
       setActiveBreak(res.data)
       setBreaks(prev => [...prev, res.data])
       showMsg(`✅ ${breakType.charAt(0).toUpperCase() + breakType.slice(1)} break started!`)
-      setActiveTab('breaks')
     } catch (err) { showMsg(err.response?.data?.error || 'Error', 'error') }
     finally { setLoading(false) }
   }
@@ -136,6 +157,77 @@ export default function EmployeeDashboard() {
     } catch (err) { showMsg(err.response?.data?.error || 'Error', 'error') }
   }
 
+  const fetchRooms = async () => {
+    try {
+      const res = await api.get('/meeting_rooms', { params: { date: bookingDate } })
+      setRooms(res.data)
+      if (!selectedRoomId && res.data.length > 0) setSelectedRoomId(res.data[0].id)
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Unable to load rooms', 'error')
+    }
+  }
+
+  const fetchBookings = async () => {
+    try {
+      const res = await api.get('/room_bookings')
+      setBookings(res.data)
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Unable to load bookings', 'error')
+    }
+  }
+
+  const createBooking = async (e) => {
+    e.preventDefault()
+    if (!selectedRoomId) {
+      showMsg('Select a room to book', 'error')
+      return
+    }
+    if (startTime >= endTime) {
+      showMsg('End time must be after start time', 'error')
+      return
+    }
+    const selectedRoom = rooms.find(room => room.id === selectedRoomId)
+    const conflict = selectedRoom?.booked_slots?.some(slot => !(endTime <= slot.start_time || startTime >= slot.end_time))
+    if (conflict) {
+      showMsg('Selected slot conflicts with an existing booking', 'error')
+      return
+    }
+    setBookingLoading(true)
+    try {
+      await api.post('/room_bookings', {
+        room_booking: {
+          meeting_room_id: selectedRoomId,
+          date: bookingDate,
+          start_time: startTime,
+          end_time: endTime,
+          purpose
+        }
+      })
+      showMsg('✅ Room booked successfully!')
+      setPurpose('Team sync')
+      fetchRooms()
+      fetchBookings()
+    } catch (err) {
+      showMsg(err.response?.data?.errors?.[0] || 'Unable to create booking', 'error')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
+
+  const cancelBooking = async (bookingId) => {
+    setBookingLoading(true)
+    try {
+      await api.delete(`/room_bookings/${bookingId}`)
+      showMsg('✅ Booking cancelled')
+      fetchRooms()
+      fetchBookings()
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Unable to cancel booking', 'error')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
+
   const submitPasswordChange = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -158,9 +250,7 @@ export default function EmployeeDashboard() {
       a.download = `my_attendance_${new Date().toISOString().slice(0,10)}.csv`
       a.click()
       window.URL.revokeObjectURL(url)
-    } catch (err) {
-      showMsg('Failed to export', 'error')
-    }
+    } catch (err) { showMsg('Failed to export', 'error') }
   }
 
   const checkedIn  = !!attendance?.clock_in
@@ -168,18 +258,42 @@ export default function EmployeeDashboard() {
 
   const lunchCount    = breaks.filter(b => b.break_type === 'lunch').length
   const shortCount    = breaks.filter(b => b.break_type === 'short').length
-  const totalBreakMin = breaks.reduce((sum, b) => sum + (b.duration_mins || 0), 0)
 
   const activeSeconds      = activeBreak ? Math.floor((now - new Date(activeBreak.break_start)) / 1000) : 0
   const activeDurationMins = Math.floor(activeSeconds / 60)
   const activeSecsRemain   = activeSeconds % 60
 
-  const rawWorkSeconds     = attendance?.clock_in && !attendance?.clock_out
+  const BREAK_LIMIT      = 90
+  const totalBreakMin    = breaks.reduce((sum, b) => sum + (b.duration_mins || 0), 0) + activeDurationMins
+  const breakUsagePct    = Math.min(100, (totalBreakMin / BREAK_LIMIT) * 100)
+  const breakStatusColor = totalBreakMin > BREAK_LIMIT ? '#ef4444' : totalBreakMin > 60 ? '#f59e0b' : '#22c55e'
+  const breakStatusLabel = totalBreakMin > BREAK_LIMIT ? 'Break Exceeded' : totalBreakMin > 60 ? 'Approaching limit' : 'Within limit'
+
+  const rawWorkSeconds = attendance?.clock_in && !attendance?.clock_out
     ? Math.max(0, Math.floor((now - new Date(attendance.clock_in)) / 1000))
     : 0
-  const completedBreakSecs = totalBreakMin * 60
-  const activeBreakSecs    = activeBreak ? Math.floor((now - new Date(activeBreak.break_start)) / 1000) : 0
-  const netWorkSeconds     = Math.max(0, rawWorkSeconds - completedBreakSecs - activeBreakSecs)
+  const netWorkSeconds = rawWorkSeconds
+  const netWorkHrs     = (netWorkSeconds / 3600).toFixed(2)
+
+  // Progress circle calculations (8hr work day)
+  const WORK_DAY_SECS  = 8 * 3600
+  const progressPct    = Math.min(100, (netWorkSeconds / WORK_DAY_SECS) * 100)
+  const circumference  = 2 * Math.PI * 54
+  const strokeDash     = (progressPct / 100) * circumference
+
+  // Today's activity timeline
+  const todayActivity = []
+  if (attendance?.clock_in) todayActivity.push({ type: 'in',  time: new Date(attendance.clock_in),  label: 'Punch In' })
+  breaks.forEach(b => {
+    if (b.break_start) todayActivity.push({ type: 'out', time: new Date(b.break_start), label: 'Break Start' })
+    if (b.break_end)   todayActivity.push({ type: 'in',  time: new Date(b.break_end),   label: 'Break End' })
+  })
+  if (attendance?.clock_out) todayActivity.push({ type: 'out', time: new Date(attendance.clock_out), label: 'Punch Out' })
+  todayActivity.sort((a, b) => a.time - b.time)
+
+  // Weekly stats
+  const thisWeekHrs  = history.slice(0, 5).reduce((s, a) => s + (parseFloat(a.total_hours) || 0), 0).toFixed(1)
+  const thisMonthHrs = history.slice(0, 22).reduce((s, a) => s + (parseFloat(a.total_hours) || 0), 0).toFixed(1)
 
   const chartData = history.slice(0, 7).reverse().map(a => ({
     date:  a.date?.slice(5),
@@ -192,326 +306,445 @@ export default function EmployeeDashboard() {
     color:      message.type === 'error' ? '#e53e3e' : message.type === 'warning' ? '#b7791f' : '#085041',
   }
 
+  const today = now.toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'short', year:'numeric' })
+
   return (
     <div style={styles.layout}>
+
+      {/* ── Icon Sidebar ── */}
       <div style={styles.sidebar}>
-        <div style={styles.sidebarTop}>
-          <div style={styles.sidebarTitle}>
-            <span style={{ fontSize:'20px' }}>🎯</span>
-            <div>
-              <div style={{ fontSize:'14px', fontWeight:'700', color:'#fff', letterSpacing:'0.03em' }}>MFR WorkTrackr</div>
-              <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)' }}>Attendance System</div>
-            </div>
+        <div>
+          <div style={styles.sidebarLogo}>
+            <img src={mfrLogo} alt="MFR logo" style={styles.sidebarLogoImg} />
           </div>
-          <nav style={{ padding:'0.5rem 0' }}>
-            {SIDEBAR_LINKS.map(link => (
-              <button key={link.key} onClick={() => setActiveTab(link.key)}
-                style={{ ...styles.navBtn, ...(activeTab === link.key ? styles.navBtnActive : {}) }}>
-                <span style={{ fontSize:'16px', width:'20px', textAlign:'center' }}>{link.icon}</span>
-                <span>{link.label}</span>
-                {link.key === 'breaks' && activeBreak && <span style={styles.activeDot} />}
-              </button>
-            ))}
-          </nav>
+          {NAV_LINKS.map(link => (
+    
+            <button key={link.key}
+              onClick={() => setActiveTab(link.key)}
+              onMouseEnter={() => setHoveredTab(link.key)}
+              onMouseLeave={() => setHoveredTab(null)}
+              style={{
+                ...styles.navBtn,
+                ...(activeTab === link.key ? styles.navBtnActive : {}),
+                ...(hoveredTab === link.key ? styles.navBtnHover : {})
+              }}>
+              <span style={styles.navIcon}>{link.icon}</span>
+              <span style={styles.navLabel}>{link.label}</span>
+            </button>
+          ))}
         </div>
-
-        <div style={styles.sidebarBottom}>
-          {!checkedIn && (
-            <button onClick={handleCheckIn} disabled={loading} style={styles.checkInBtn}>✦ Check In</button>
-          )}
-          {checkedIn && !checkedOut && !activeBreak && (
-            <button onClick={handleCheckOut} disabled={loading} style={styles.checkOutBtn}>✦ Check Out</button>
-          )}
-          {checkedIn && checkedOut && (
-            <div style={styles.doneBtn}>✓ Done for today</div>
-          )}
-
-          {checkedIn && !checkedOut && (
-            <div style={styles.breakSection}>
-              {!activeBreak ? (
-                <>
-                  <p style={styles.breakLabel}>Start Break</p>
-                  {BREAK_TYPES.map(bt => {
-                    const count = bt.value === 'lunch' ? lunchCount : bt.value === 'short' ? shortCount : 0
-                    const maxed = bt.maxCount && count >= bt.maxCount
-                    return (
-                      <button key={bt.value} onClick={() => startBreak(bt.value)}
-                        disabled={loading || maxed}
-                        style={{ ...styles.breakBtn, opacity: maxed ? 0.4 : 1 }}>
-                        {bt.label}
-                        {bt.max && <span style={styles.breakMax}>{bt.max}m</span>}
-                        {maxed && <span style={{ ...styles.breakMax, color:'#ff6b6b' }}>✗</span>}
-                      </button>
-                    )
-                  })}
-                </>
-              ) : (
-                <div>
-                  <div style={styles.activeBreakCard}>
-                    <p style={styles.activeBreakType}>
-                      {activeBreak.break_type === 'lunch' ? '🍽️' : activeBreak.break_type === 'short' ? '☕' : '🚶'}
-                      {' '}{activeBreak.break_type} break
-                    </p>
-                    <p style={{
-                      ...styles.activeBreakTimer,
-                      color: activeDurationMins > (BREAK_TYPES.find(b => b.value === activeBreak.break_type)?.max || 999)
-                        ? '#ff6b6b' : '#1D9E75'
-                    }}>
-                      {activeDurationMins > 0 ? `${activeDurationMins}m ${activeSecsRemain}s` : `${activeSecsRemain}s`}
-                    </p>
-                    {BREAK_TYPES.find(b => b.value === activeBreak.break_type)?.max && (
-                      <p style={styles.activeBreakLimit}>
-                        limit: {BREAK_TYPES.find(b => b.value === activeBreak.break_type).max} min
-                      </p>
-                    )}
-                  </div>
-                  <button onClick={endBreak} disabled={loading} style={styles.endBreakBtn}>⏹ End Break</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={logout}
+          onMouseEnter={() => setIsLogoutHovered(true)}
+          onMouseLeave={() => setIsLogoutHovered(false)}
+          style={{
+            ...styles.logoutBtn,
+            ...(isLogoutHovered ? styles.logoutBtnHover : {})
+          }}>
+          <span style={styles.navIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 17L15 12L10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 12H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M20 4H16C14.8954 4 14 4.89543 14 6V18C14 19.1046 14.8954 20 16 20H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span style={styles.navLabel}>Logout</span>
+        </button>
       </div>
 
-      <div style={styles.main}>
-        <div style={styles.topBar}>
-          <h1 style={styles.welcome}>Welcome, {user?.name} 👋</h1>
-          <div style={styles.topBarRight}>
-            <div style={styles.profileWrap}
-              onMouseEnter={() => setShowProfile(true)}
-              onMouseLeave={() => setShowProfile(false)}>
-              <div style={styles.profileAvatarBtn}>
-                {user?.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-              {showProfile && (
-                <div style={styles.profileCard}>
-                  <div style={styles.profileHeader}>
-                    <div style={styles.profileAvatarLarge}>{user?.name?.charAt(0)?.toUpperCase()}</div>
-                    <div>
-                      <p style={styles.profileName}>{user?.name}</p>
-                      <p style={styles.profileRole}>{user?.job_title || user?.role}</p>
-                    </div>
-                  </div>
-                  <p style={styles.profileEmail}>{user?.email}</p>
-                  <div style={styles.profileActions}>
-                    <button style={styles.profileBtn} onClick={() => { setActiveTab('password'); setShowProfile(false) }}>
-                      Change Password
-                    </button>
-                    <button style={styles.profileBtnDanger} onClick={logout}>Logout</button>
-                  </div>
-                </div>
-              )}
-            </div>
+      {/* ── Profile Sidebar ── */}
+      <div style={styles.profileSidebar}>
+        {/* Avatar */}
+        <div style={styles.avatarWrap}>
+          <div style={styles.avatarCircle}>
+            {user?.name?.charAt(0)?.toUpperCase() || '?'}
           </div>
         </div>
+
+        {/* Name & Title */}
+        <p style={styles.profileName}>{user?.name || 'Employee Name'}</p>
+        <p style={styles.profileId}>{user?.employee_id || 'ID not assigned'}</p>
+        <p style={styles.profileDesignation}>{user?.job_title || 'Employee'}</p>
+        
+        <div style={styles.profileDivider} />
+
+        <div style={styles.reportingWrap}>
+          <p style={styles.reportingLabel}>Reporting Manager</p>
+          <p style={styles.reportingValue}>{user?.manager_name || user?.reporting_manager || '—'}</p>
+        </div>
+
+        <div style={styles.profileDivider} />
+
+        {/* Status */}
+        <p style={{
+          ...styles.profileStatus,
+          color: checkedIn && !checkedOut ? '#22c55e' : '#e53e3e'
+        }}>
+          {checkedIn && !checkedOut ? 'In' : checkedOut ? 'Out' : 'Yet to check-in'}
+        </p>
+
+        {/* HH:MM:SS Timer */}
+        <div style={styles.timerRow}>
+          <div style={styles.timerBox}>{String(Math.floor(netWorkSeconds / 3600)).padStart(2,'0')}</div>
+          <span style={styles.timerSep}>:</span>
+          <div style={styles.timerBox}>{String(Math.floor((netWorkSeconds % 3600) / 60)).padStart(2,'0')}</div>
+          <span style={styles.timerSep}>:</span>
+          <div style={styles.timerBox}>{String(netWorkSeconds % 60).padStart(2,'00')}</div>
+        </div>
+
+        <div style={styles.profileDivider} />
+
+        {/* Reporting To */}
+        {/* <div style={styles.reportingWrap}>
+          <p style={styles.reportingLabel}>Reporting Manager</p>
+<p style={styles.reportingValue}>
+  {userProfile?.manager_id ? `${userProfile.manager_id} - ${userProfile.manager}` : '—'}
+</p>
+<div style={styles.profileDivider} />
+<p style={styles.reportingLabel}>Department</p>
+<p style={styles.reportingValue}>{userProfile?.department || '—'}</p>
+        </div> */}
+
+        <div style={styles.profileDivider} />
+
+        {/* Break Buttons */}
+        {checkedIn && !checkedOut && (
+          <div style={{width:'100%'}}>
+            <p style={styles.breakSectionLabel}>Breaks</p>
+            {!activeBreak ? (
+              BREAK_TYPES.map(bt => (
+                <button key={bt.value} onClick={() => startBreak(bt.value)}
+                  disabled={loading}
+                  style={styles.breakBtn}>
+                  {bt.label}
+                </button>
+              ))
+            ) : (
+              <div style={styles.activeBreakWrap}>
+                <p style={styles.activeBreakLabel}>
+                  {activeBreak.break_type === 'lunch' ? '🍽️' : activeBreak.break_type === 'short' ? '☕' : '🚶'}
+                  {' '}{activeBreak.break_type} — {activeDurationMins > 0 ? `${activeDurationMins}m ${activeSecsRemain}s` : `${activeSecsRemain}s`}
+                </p>
+                <button onClick={endBreak} style={styles.endBreakBtn}>⏹ End Break</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Change Password */}
+        <button onClick={() => setActiveTab('password')} style={styles.changePassBtn}>🔑 Change Password</button>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div style={styles.main}>
 
         {message.text && <div style={msgStyle}>{message.text}</div>}
 
+        {/* ── HOME ── */}
         {activeTab === 'overview' && (
-          <div>
-            <div style={styles.profileHeroCard}>
-              <div style={styles.profileHeroInitial}>
-                {user?.name?.charAt(0)?.toUpperCase() || '?'}
+          <div style={styles.homeGrid}>
+
+            {/* Timesheet Card */}
+            <div style={styles.timesheetCard}>
+              <div style={styles.timesheetHeader}>
+                <span style={styles.timesheetTitle}>Timesheet</span>
+                <span style={styles.timesheetDate}>{today}</span>
               </div>
-              <div style={styles.profileHeroInfo}>
-                <p style={styles.profileHeroId}>{user?.employee_id} — {user?.name}</p>
-                <p style={styles.profileHeroTitle}>{user?.job_title || 'Employee'}</p>
-                <p style={{
-                  ...styles.profileHeroStatus,
-                  color: checkedIn && !checkedOut ? '#1D9E75' : checkedOut ? '#2d6bcf' : '#e53e3e'
-                }}>
-                  {checkedIn && !checkedOut ? '● Active — Working'
-                    : checkedOut ? '● Checked Out'
-                    : '● Yet to check-in'}
+              {attendance?.clock_in && (
+                <p style={styles.punchInTime}>
+                  Punch In at {new Date(attendance.clock_in).toLocaleDateString('en-US', {weekday:'short', day:'numeric', month:'short', year:'numeric'})} {new Date(attendance.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
                 </p>
-                <div style={styles.timerWrap}>
-                  <div style={styles.timerBlock}>
-                    <span style={styles.timerNum}>{String(Math.floor(netWorkSeconds / 3600)).padStart(2, '0')}</span>
+              )}
+
+              {/* Circular Progress */}
+              <div style={styles.circleWrap}>
+                <svg width="140" height="140" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                  <circle cx="60" cy="60" r="54" fill="none"
+                    stroke={progressPct >= 100 ? '#22c55e' : '#3b82f6'}
+                    strokeWidth="10"
+                    strokeDasharray={`${strokeDash} ${circumference}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 60 60)"
+                    style={{transition:'stroke-dasharray 1s ease'}}
+                  />
+                  <text x="60" y="55" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1a1a2e">
+                    {netWorkHrs} hrs
+                  </text>
+                  <text x="60" y="72" textAnchor="middle" fontSize="9" fill="#888">
+                    of 8 hrs
+                  </text>
+                </svg>
+              </div>
+
+              {/* Punch In/Out Button */}
+              {!checkedIn && (
+                <button onClick={handleCheckIn} disabled={loading} style={styles.punchInBtn}>
+                  ✦ Punch In
+                </button>
+              )}
+              {checkedIn && !checkedOut && !activeBreak && (
+                <button onClick={handleCheckOut} disabled={loading} style={styles.punchOutBtn}>
+                  Punch Out
+                </button>
+              )}
+              {checkedIn && checkedOut && (
+                <div style={styles.doneChip}>✓ Done for today</div>
+              )}
+              {checkedIn && !checkedOut && activeBreak && (
+                <div style={styles.onBreakChip}>☕ On Break</div>
+              )}
+
+              {/* Break & Overtime */}
+              <div style={styles.timesheetFooter}>
+                <div style={styles.timesheetStat}>
+                  <p style={styles.timesheetStatLabel}>BREAK</p>
+                  <p style={{...styles.timesheetStatVal, color: breakStatusColor}}>{totalBreakMin} mins / {BREAK_LIMIT} mins</p>
+                  <p style={{margin:0, fontSize:'11px', color: breakStatusColor, fontWeight:'600'}}>{breakStatusLabel}</p>
+                </div>
+                <div style={styles.timesheetStat}>
+                  <p style={styles.timesheetStatLabel}>STATUS</p>
+                  <p style={{...styles.timesheetStatVal,
+                    color: attendance?.status === 'present' ? '#22c55e'
+                         : attendance?.status === 'half_day' ? '#f59e0b'
+                         : attendance?.status === 'late' ? '#3b82f6' : '#e53e3e'
+                  }}>{attendance?.status?.replace('_',' ') || '—'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Statistics Card */}
+            <div style={styles.statsCard}>
+              <p style={styles.statsTitle}>Statistics</p>
+              {[
+                { label:'Today',      val: netWorkHrs,     max: 8,   color:'#22c55e' },
+                { label:'This Week',  val: thisWeekHrs,    max: 40,  color:'#e53e3e' },
+                { label:'This Month', val: thisMonthHrs,   max: 180, color:'#3b82f6' },
+                { label:'Remaining',  val: Math.max(0, 180 - parseFloat(thisMonthHrs)).toFixed(1), max: 180, color:'#a855f7' },
+              ].map((s, i) => (
+                <div key={i} style={styles.statRow}>
+                  <div style={styles.statRowLeft}>
+                    <span style={styles.statRowLabel}>{s.label}</span>
+                    <span style={styles.statRowVal}>{s.val} / {s.max} hrs</span>
                   </div>
-                  <span style={styles.timerColon}>:</span>
-                  <div style={styles.timerBlock}>
-                    <span style={styles.timerNum}>{String(Math.floor((netWorkSeconds % 3600) / 60)).padStart(2, '00')}</span>
-                  </div>
-                  <span style={styles.timerColon}>:</span>
-                  <div style={styles.timerBlock}>
-                    <span style={styles.timerNum}>{String(netWorkSeconds % 60).padStart(2, '00')}</span>
+                  <div style={styles.progressBar}>
+                    <div style={{
+                      ...styles.progressFill,
+                      width: `${Math.min(100, (parseFloat(s.val) / s.max) * 100)}%`,
+                      background: s.color
+                    }} />
                   </div>
                 </div>
-                <p style={styles.timerLabel}>
-                  {checkedIn && !checkedOut ? 'Working hours today'
-                    : checkedOut ? `Total: ${attendance?.total_hours}h`
-                    : 'Check in to start timer'}
-                </p>
-              </div>
+              ))}
             </div>
 
-            <div style={styles.statsRow}>
-              <div style={styles.statCard}>
-                <p style={styles.statNum}>{attendance?.clock_in ? new Date(attendance.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '--:--'}</p>
-                <p style={styles.statLabel}>Check In</p>
-              </div>
-              <div style={styles.statCard}>
-                <p style={styles.statNum}>
-                  {attendance?.clock_out
-                    ? new Date(attendance.clock_out).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-                    : checkedIn ? '⏳' : '--:--'}
-                </p>
-                <p style={styles.statLabel}>Check Out</p>
-              </div>
-              <div style={styles.statCard}>
-                <p style={styles.statNum}>{totalBreakMin}m</p>
-                <p style={styles.statLabel}>Break Time</p>
-              </div>
-              <div style={styles.statCard}>
-                <p style={{...styles.statNum,
-                  color: attendance?.status === 'present' ? '#1D9E75'
-                       : attendance?.status === 'half_day' ? '#e88c30'
-                       : attendance?.status === 'absent' ? '#e53e3e' : '#2d6bcf'
-                }}>
-                  {attendance?.status ? attendance.status.replace('_', ' ') : 'N/A'}
-                </p>
-                <p style={styles.statLabel}>Status</p>
-              </div>
-              <div style={styles.statCard}>
-                <p style={styles.statNum}>{attendance?.total_hours ? `${attendance.total_hours}h` : '0h'}</p>
-                <p style={styles.statLabel}>Work Hours</p>
-              </div>
+            {/* Today Activity */}
+            <div style={styles.activityCard}>
+              <p style={styles.activityTitle}>Today Activity</p>
+              {todayActivity.length === 0 ? (
+                <p style={{color:'#888', fontSize:'13px', textAlign:'center', marginTop:'2rem'}}>No activity yet</p>
+              ) : (
+                <div style={styles.timeline}>
+                  {todayActivity.map((a, i) => (
+                    <div key={i} style={styles.timelineItem}>
+                      <div style={{
+                        ...styles.timelineDot,
+                        background: a.type === 'in' ? '#22c55e' : '#e53e3e'
+                      }} />
+                      <div>
+                        <p style={styles.timelineLabel}>{a.label}</p>
+                        <p style={styles.timelineTime}>
+                          {a.time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div style={styles.card}>
-              <h3 style={styles.cardTitle}>Last 7 Days — Working Hours</h3>
-              <ResponsiveContainer width="100%" height={250}>
+            {/* Attendance List */}
+            <div style={styles.attendanceListCard}>
+              <div style={styles.cardHeader}>
+                <p style={styles.cardTitle}>Attendance List</p>
+                <button onClick={exportAttendance} style={styles.exportBtn}>⬇ Export</button>
+              </div>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.thead}>
+                    <th style={styles.th}>S.No</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Punch In</th>
+                    <th style={styles.th}>Punch Out</th>
+                    <th style={styles.th}>Production</th>
+                    <th style={styles.th}>Break</th>
+                    
+                    <th style={styles.th}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.slice(0, 10).map((a, i) => {
+                    const breakMins = a.total_break_mins || 0
+                    return (
+                      <tr key={a.id} style={styles.tr}>
+                        <td style={styles.td}>{i + 1}</td>
+                        <td style={styles.td}>{a.date}</td>
+                        <td style={styles.td}>{a.clock_in ? new Date(a.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                        <td style={styles.td}>{a.clock_out ? new Date(a.clock_out).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                        <td style={styles.td}>{a.total_hours ? `${a.total_hours} hrs` : '-'}</td>
+                        <td style={styles.td}>{totalBreakMin} mins </td>
+                        <td style={styles.td}>
+                          <span style={{...styles.badge,
+                            background: a.status==='present'?'#e1f5ee':a.status==='half_day'?'#fff9e6':a.status==='late'?'#e6f1fb':'#fff0f0',
+                            color: a.status==='present'?'#085041':a.status==='half_day'?'#b7791f':a.status==='late'?'#0C447C':'#e53e3e'
+                          }}>{a.status?.replace('_',' ')}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {history.length === 0 && (
+                    <tr><td colSpan={7} style={{...styles.td, color:'#888', textAlign:'center'}}>No records yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Daily Records Chart */}
+            <div style={styles.chartCard}>
+              <p style={styles.chartTitle}>Daily Records</p>
+              <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{fontSize:11}} />
+                  <YAxis tick={{fontSize:11}} />
                   <Tooltip />
-                  <Bar dataKey="hours" fill="#2d6bcf" radius={[4,4,0,0]} />
+                  <Bar dataKey="hours" fill="#3b82f6" radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
           </div>
         )}
 
-        {activeTab === 'breaks' && (
+        {/* ── ROOM BOOKING ── */}
+        {activeTab === 'bookings' && (
           <div>
-            <div style={styles.statsRow}>
-              {BREAK_TYPES.map(bt => {
-                const count    = bt.value === 'lunch' ? lunchCount : bt.value === 'short' ? shortCount : breaks.filter(b => b.break_type === bt.value).length
-                const totalMins = breaks.filter(b => b.break_type === bt.value).reduce((s, b) => s + (b.duration_mins || 0), 0)
-                const exceeded  = bt.max && totalMins > bt.max
-                return (
-                  <div key={bt.value} style={{ ...styles.statCard, borderTop:`3px solid ${exceeded ? '#e53e3e' : '#2d6bcf'}` }}>
-                    <p style={styles.statNum}>{totalMins}m</p>
-                    <p style={styles.statLabel}>{bt.label}</p>
-                    <p style={{ fontSize:'11px', color: exceeded ? '#e53e3e' : '#888', margin:'4px 0 0' }}>
-                      {bt.max ? `limit: ${bt.max}m` : 'no limit'}
-                      {bt.maxCount ? ` · ${count}/${bt.maxCount} used` : ''}
-                    </p>
-                    {exceeded && <p style={{ fontSize:'11px', color:'#e53e3e', margin:'2px 0 0', fontWeight:'600' }}>⚠️ Exceeded</p>}
-                  </div>
-                )
-              })}
-              <div style={styles.statCard}>
-                <p style={styles.statNum}>{totalBreakMin}m</p>
-                <p style={styles.statLabel}>Total Break</p>
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <p style={styles.cardTitle}>Meeting Rooms</p>
+                <div style={styles.roomHeaderActions}>
+                  <label style={styles.formLabel}>Date</label>
+                  <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} style={styles.formInput} />
+                </div>
+              </div>
+              <div style={styles.roomGrid}>
+                {rooms.map(room => (
+                  <button key={room.id} onClick={() => setSelectedRoomId(room.id)}
+                    style={{
+                      ...styles.roomCard,
+                      borderColor: selectedRoomId === room.id ? '#3b82f6' : '#e2e8f0',
+                      background: selectedRoomId === room.id ? '#eff6ff' : '#fff'
+                    }}>
+                    <div style={styles.roomTitle}>{room.name}</div>
+                    <div style={styles.roomMeta}>{room.location}</div>
+                    <div style={styles.roomStats}>
+                      <span>{room.capacity} seats</span>
+                      <span style={{ color: room.available ? '#16a34a' : '#dc2626' }}>
+                        {room.available ? 'Available' : 'Booked'}
+                      </span>
+                    </div>
+                    {room.booked_slots?.length > 0 && (
+                      <div style={styles.slotSummary}>
+                        {room.booked_slots.map((slot, index) => (
+                          <span key={index} style={styles.slotBadge}>{slot.start_time} - {slot.end_time}</span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
+                {rooms.length === 0 && (
+                  <div style={{ gridColumn:'1 / -1', color:'#64748b', textAlign:'center', padding:'1.5rem' }}>No rooms available for the selected date.</div>
+                )}
               </div>
             </div>
 
             <div style={styles.card}>
-              <h3 style={styles.cardTitle}>Today's Break Log</h3>
-              {breaks.length === 0 ? (
-                <p style={{ color:'#888', textAlign:'center', padding:'2rem' }}>No breaks taken today</p>
-              ) : (
-                <table style={styles.table}>
-                  <thead>
-                    <tr style={styles.thead}>
-                      <th style={styles.th}>#</th>
-                      <th style={styles.th}>Type</th>
-                      <th style={styles.th}>Start</th>
-                      <th style={styles.th}>End</th>
-                      <th style={styles.th}>Duration</th>
-                      <th style={styles.th}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {breaks.map((b, i) => {
-                      const limit    = BREAK_TYPES.find(bt => bt.value === b.break_type)?.max
-                      const exceeded = limit && b.duration_mins > limit
-                      return (
-                        <tr key={b.id} style={styles.tr}>
-                          <td style={styles.td}>{i + 1}</td>
-                          <td style={styles.td}>
-                            {b.break_type === 'lunch' ? '🍽️' : b.break_type === 'short' ? '☕' : '🚶'} {b.break_type}
-                          </td>
-                          <td style={styles.td}>{new Date(b.break_start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td>
-                          <td style={styles.td}>{b.break_end ? new Date(b.break_end).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                          <td style={styles.td}>
-                            {b.is_active
-                              ? <span style={{ color:'#2d6bcf', fontWeight:'600' }}>{activeDurationMins > 0 ? `${activeDurationMins}m ${activeSecsRemain}s` : `${activeSecsRemain}s`} (live)</span>
-                              : <span style={{ color: exceeded ? '#e53e3e' : '#333', fontWeight: exceeded ? '600' : '400' }}>{b.duration_mins}m</span>
-                            }
-                          </td>
-                          <td style={styles.td}>
-                            {b.is_active
-                              ? <span style={{...styles.badge, background:'#e6f1fb', color:'#0C447C'}}>Active</span>
-                              : exceeded
-                                ? <span style={{...styles.badge, background:'#fff0f0', color:'#e53e3e'}}>⚠️ Exceeded</span>
-                                : <span style={{...styles.badge, background:'#e1f5ee', color:'#085041'}}>OK</span>
-                            }
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
+              <div style={styles.cardHeader}>
+                <p style={styles.cardTitle}>Book a Room</p>
+                <span style={styles.subtitle}>Reserve an available room and protect your schedule</span>
+              </div>
+              <form onSubmit={createBooking} style={styles.bookingForm}>
+                <div style={styles.formRow}>
+                  <div style={styles.formField}>
+                    <label style={styles.formLabel}>Meeting Room</label>
+                    <select style={styles.formInput} value={selectedRoomId || ''} onChange={e => setSelectedRoomId(Number(e.target.value))}>
+                      <option value="">Select a room</option>
+                      {rooms.map((room, index) => (
+                        <option key={room.id} value={room.id}>{`Meeting Room ${index + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={styles.formField}>
+                    <label style={styles.formLabel}>Start Time</label>
+                    <input type="time" style={styles.formInput} value={startTime} onChange={e => setStartTime(e.target.value)} />
+                  </div>
+                  <div style={styles.formField}>
+                    <label style={styles.formLabel}>End Time</label>
+                    <input type="time" style={styles.formInput} value={endTime} onChange={e => setEndTime(e.target.value)} />
+                  </div>
+                </div>
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Purpose</label>
+                  <input style={styles.formInput} value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Team sync, review, client call" />
+                </div>
+                <button type="submit" disabled={bookingLoading} style={styles.submitBtn}>
+                  {bookingLoading ? 'Booking...' : 'Reserve Room'}
+                </button>
+              </form>
             </div>
-          </div>
-        )}
 
-        {activeTab === 'history' && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitle}>Attendance History</h3>
-              <button onClick={exportAttendance} style={styles.addBtn}>⬇ Export CSV</button>
-            </div>
-            <table style={styles.table}>
-              <thead>
-                <tr style={styles.thead}>
-                  <th style={styles.th}>Date</th>
-                  <th style={styles.th}>Check In</th>
-                  <th style={styles.th}>Check Out</th>
-                  <th style={styles.th}>Hours</th>
-                  <th style={styles.th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(a => (
-                  <tr key={a.id} style={styles.tr}>
-                    <td style={styles.td}>{a.date}</td>
-                    <td style={styles.td}>{a.clock_in ? new Date(a.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
-                    <td style={styles.td}>{a.clock_out ? new Date(a.clock_out).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
-                    <td style={styles.td}>{a.total_hours || '-'}</td>
-                    <td style={styles.td}>
-                      <span style={{...styles.badge,
-                        background: a.status==='present' ? '#e1f5ee' : a.status==='half_day' ? '#fff9e6' : a.status==='late' ? '#e6f1fb' : '#fff0f0',
-                        color:      a.status==='present' ? '#085041' : a.status==='half_day' ? '#b7791f' : a.status==='late' ? '#0C447C' : '#e53e3e'
-                      }}>{a.status?.replace('_',' ')}</span>
-                    </td>
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <p style={styles.cardTitle}>Your Bookings</p>
+                <span style={styles.subtitle}>Manage reservations and cancel if plans change</span>
+              </div>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.thead}>
+                    <th style={styles.th}>Room</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Time</th>
+                    <th style={styles.th}>Purpose</th>
+                    <th style={styles.th}>Status</th>
+                    <th style={styles.th}>Action</th>
                   </tr>
-                ))}
-                {history.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No records yet</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bookings.map(booking => (
+                    <tr key={booking.id} style={styles.tr}>
+                      <td style={styles.td}>{booking.meeting_room?.name}</td>
+                      <td style={styles.td}>{booking.date}</td>
+                      <td style={styles.td}>{booking.start_time} - {booking.end_time}</td>
+                      <td style={styles.td}>{booking.purpose}</td>
+                      <td style={styles.td}><span style={{...styles.badge, background:'#e1f5ee', color:'#085041'}}>Confirmed</span></td>
+                      <td style={styles.td}><button onClick={() => cancelBooking(booking.id)} style={styles.cancelBtn}>Cancel</button></td>
+                    </tr>
+                  ))}
+                  {bookings.length === 0 && (
+                    <tr><td colSpan={6} style={{...styles.td, textAlign:'center', color:'#64748b'}}>You have no room bookings yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
+        {/* ── LEAVE TRACKER ── */}
         {activeTab === 'leaves' && (
           <div style={styles.card}>
             <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitle}>Leave Requests</h3>
-              <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.addBtn}>+ New Request</button>
+              <p style={styles.cardTitle}>Leave Requests</p>
+              <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.exportBtn}>+ New Request</button>
             </div>
 
             {showLeaveForm && (
@@ -530,7 +763,7 @@ export default function EmployeeDashboard() {
                   <div style={styles.formField}>
                     <label style={styles.formLabel}>Duration</label>
                     <select style={styles.formInput} value={leaveForm.leave_slot}
-                      onChange={e => setLeaveForm({ ...leaveForm, leave_slot: e.target.value })}>
+                      onChange={e => setLeaveForm({...leaveForm, leave_slot: e.target.value})}>
                       <option value="full_day">Full Day</option>
                       <option value="first_half">First Half (Sunrise)</option>
                       <option value="second_half">Second Half (Sunset)</option>
@@ -539,18 +772,15 @@ export default function EmployeeDashboard() {
                   <div style={styles.formField}>
                     <label style={styles.formLabel}>From Date</label>
                     <input style={styles.formInput} type="date" required value={leaveForm.from_date}
-                      onChange={e => setLeaveForm({
-                        ...leaveForm,
-                        from_date: e.target.value,
-                        to_date: leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : e.target.value,
-                      })} />
+                      onChange={e => setLeaveForm({...leaveForm, from_date: e.target.value,
+                        to_date: leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : e.target.value})} />
                   </div>
                   <div style={styles.formField}>
                     <label style={styles.formLabel}>To Date</label>
                     <input style={styles.formInput} type="date" required
                       disabled={leaveForm.leave_slot !== 'full_day'}
                       value={leaveForm.leave_slot === 'full_day' ? leaveForm.to_date : leaveForm.from_date}
-                      onChange={e => setLeaveForm({ ...leaveForm, to_date: e.target.value })} />
+                      onChange={e => setLeaveForm({...leaveForm, to_date: e.target.value})} />
                   </div>
                 </div>
                 <div style={styles.formField}>
@@ -577,16 +807,14 @@ export default function EmployeeDashboard() {
                 {leaves.map(l => (
                   <tr key={l.id} style={styles.tr}>
                     <td style={styles.td}>{l.leave_type}</td>
-                    <td style={styles.td}>
-                      {l.leave_slot === 'first_half' ? 'First Half' : l.leave_slot === 'second_half' ? 'Second Half' : 'Full Day'}
-                    </td>
+                    <td style={styles.td}>{l.leave_slot === 'first_half' ? 'First Half' : l.leave_slot === 'second_half' ? 'Second Half' : 'Full Day'}</td>
                     <td style={styles.td}>{l.from_date}</td>
                     <td style={styles.td}>{l.to_date}</td>
                     <td style={styles.td}>{l.reason}</td>
                     <td style={styles.td}>
                       <span style={{...styles.badge,
                         background: l.status==='approved'?'#e1f5ee':l.status==='rejected'?'#fff0f0':'#fff9e6',
-                        color:      l.status==='approved'?'#085041':l.status==='rejected'?'#e53e3e':'#b7791f'
+                        color: l.status==='approved'?'#085041':l.status==='rejected'?'#e53e3e':'#b7791f'
                       }}>{l.status}</span>
                     </td>
                   </tr>
@@ -597,9 +825,120 @@ export default function EmployeeDashboard() {
           </div>
         )}
 
+        {/* ── TIME TRACKER (BREAKS) ── */}
+        {activeTab === 'breaks' && (
+          <div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1.5rem'}}>
+              {BREAK_TYPES.map(bt => {
+                const totalMins = breaks.filter(b => b.break_type === bt.value).reduce((s, b) => s + (b.duration_mins || 0), 0) + (activeBreak?.break_type === bt.value ? activeDurationMins : 0)
+                return (
+                  <div key={bt.value} style={{...styles.card, borderTop:`3px solid #3b82f6`}}>
+                    <p style={{margin:'0 0 4px', fontSize:'20px', fontWeight:'700', color:'#3b82f6'}}>{totalMins}m</p>
+                    <p style={{margin:0, color:'#888', fontSize:'12px'}}>{bt.label}</p>
+                    <p style={{fontSize:'11px', color:'#64748b', margin:'4px 0 0'}}>
+                      Unlimited
+                    </p>
+                  </div>
+                )
+              })}
+              <div style={{...styles.card, borderTop:`3px solid ${breakStatusColor}`}}>
+                <p style={{margin:'0 0 4px', fontSize:'20px', fontWeight:'700', color:breakStatusColor}}>{totalBreakMin}m</p>
+                <p style={{margin:0, color:'#888', fontSize:'12px'}}>Total Break</p>
+                <p style={{margin:'6px 0 0', fontSize:'12px', color:breakStatusColor, fontWeight:'600'}}>
+                  {breakStatusLabel}
+                </p>
+                <p style={{margin:'4px 0 0', fontSize:'11px', color:'#64748b'}}>Limit: {BREAK_LIMIT}m</p>
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <p style={styles.cardTitle}>Today's Break Log</p>
+              {breaks.length === 0 ? (
+                <p style={{color:'#888', textAlign:'center', padding:'2rem'}}>No breaks taken today</p>
+              ) : (
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thead}>
+                      <th style={styles.th}>#</th>
+                      <th style={styles.th}>Type</th>
+                      <th style={styles.th}>Start</th>
+                      <th style={styles.th}>End</th>
+                      <th style={styles.th}>Duration</th>
+                      <th style={styles.th}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breaks.map((b, i) => {
+                      const totalExceeded = totalBreakMin > BREAK_LIMIT
+                      return (
+                        <tr key={b.id} style={styles.tr}>
+                          <td style={styles.td}>{i + 1}</td>
+                          <td style={styles.td}>{b.break_type === 'lunch' ? '🍽️' : b.break_type === 'short' ? '☕' : '🚶'} {b.break_type}</td>
+                          <td style={styles.td}>{new Date(b.break_start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td>
+                          <td style={styles.td}>{b.break_end ? new Date(b.break_end).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                          <td style={styles.td}>
+                            {b.is_active
+                              ? <span style={{color:'#3b82f6', fontWeight:'600'}}>{activeDurationMins > 0 ? `${activeDurationMins}m ${activeSecsRemain}s` : `${activeSecsRemain}s`} (live)</span>
+                              : <span style={{color: '#333'}}>{b.duration_mins}m</span>
+                            }
+                          </td>
+                          <td style={styles.td}>
+                            {b.is_active ? <span style={{...styles.badge, background: totalExceeded ? '#fff0f0' : '#e6f1fb', color: totalExceeded ? '#e53e3e' : '#0C447C'}}>{totalExceeded ? 'Exceeded' : 'Active'}</span>
+                              : <span style={{...styles.badge, background:'#e1f5ee', color:'#085041'}}>Completed</span>
+                            }
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── ATTENDANCE ── */}
+        {activeTab === 'history' && (
+          <div style={styles.card}>
+            <div style={styles.cardHeader}>
+              <p style={styles.cardTitle}>Attendance History</p>
+              <button onClick={exportAttendance} style={styles.exportBtn}>⬇ Export CSV</button>
+            </div>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.thead}>
+                  <th style={styles.th}>Date</th>
+                  <th style={styles.th}>Punch In</th>
+                  <th style={styles.th}>Punch Out</th>
+                  <th style={styles.th}>Hours</th>
+                  <th style={styles.th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(a => (
+                  <tr key={a.id} style={styles.tr}>
+                    <td style={styles.td}>{a.date}</td>
+                    <td style={styles.td}>{a.clock_in ? new Date(a.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                    <td style={styles.td}>{a.clock_out ? new Date(a.clock_out).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                    <td style={styles.td}>{a.total_hours || '-'}</td>
+                    <td style={styles.td}>
+                      <span style={{...styles.badge,
+                        background: a.status==='present'?'#e1f5ee':a.status==='half_day'?'#fff9e6':a.status==='late'?'#e6f1fb':'#fff0f0',
+                        color: a.status==='present'?'#085041':a.status==='half_day'?'#b7791f':a.status==='late'?'#0C447C':'#e53e3e'
+                      }}>{a.status?.replace('_',' ')}</span>
+                    </td>
+                  </tr>
+                ))}
+                {history.length === 0 && <tr><td colSpan={5} style={{...styles.td, color:'#888', textAlign:'center'}}>No records yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── CHANGE PASSWORD ── */}
         {activeTab === 'password' && (
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Change Password</h3>
+            <p style={styles.cardTitle}>Change Password</p>
             <form onSubmit={submitPasswordChange} style={styles.leaveForm}>
               <div style={styles.formField}>
                 <label style={styles.formLabel}>Current Password</label>
@@ -625,77 +964,117 @@ export default function EmployeeDashboard() {
             </form>
           </div>
         )}
+
       </div>
     </div>
   )
 }
 
 const styles = {
-  layout:             { display:'flex', minHeight:'100vh', background:'#f0f2f5' },
-  sidebar:            { width:'260px', background:'linear-gradient(180deg,#0f0c29 0%,#1a1a4e 50%,#24243e 100%)', display:'flex', flexDirection:'column', justifyContent:'space-between', padding:'0', flexShrink:0, overflowY:'auto', boxShadow:'4px 0 24px rgba(0,0,0,0.3)' },
-  sidebarTop:         { padding:'0' },
-  sidebarTitle:       { color:'#fff', fontSize:'16px', fontWeight:'700', padding:'1.5rem 1.25rem 0.75rem', letterSpacing:'0.02em', borderBottom:'1px solid rgba(255,255,255,0.08)', marginBottom:'0.5rem', display:'flex', alignItems:'center', gap:'8px' },
-  navBtn:             { display:'flex', alignItems:'center', gap:'12px', width:'100%', padding:'11px 1.25rem', background:'transparent', border:'none', color:'rgba(255,255,255,0.55)', fontSize:'13.5px', cursor:'pointer', borderRadius:'0', marginBottom:'2px', textAlign:'left', borderLeft:'3px solid transparent' },
-  navBtnActive:       { background:'rgba(255,255,255,0.08)', color:'#fff', borderLeft:'3px solid #7F77DD' },
-  activeDot:          { marginLeft:'auto', width:'7px', height:'7px', borderRadius:'50%', background:'#1D9E75', display:'inline-block' },
-  sidebarBottom:      { padding:'1rem 1.25rem', display:'flex', flexDirection:'column', gap:'8px', borderTop:'1px solid rgba(255,255,255,0.08)' },
-  checkInBtn:         { width:'100%', padding:'11px', background:'linear-gradient(135deg,#1D9E75,#0F6E56)', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
-  checkOutBtn:        { width:'100%', padding:'11px', background:'linear-gradient(135deg,#e53e3e,#c53030)', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
-  doneBtn:            { width:'100%', padding:'11px', background:'rgba(29,158,117,0.15)', color:'#1D9E75', border:'1px solid rgba(29,158,117,0.3)', borderRadius:'8px', fontSize:'13px', fontWeight:'600', textAlign:'center' },
-  breakSection:       { borderTop:'1px solid rgba(255,255,255,0.08)', paddingTop:'10px' },
-  breakLabel:         { color:'rgba(255,255,255,0.4)', fontSize:'10px', fontWeight:'600', letterSpacing:'0.08em', textTransform:'uppercase', margin:'0 0 6px' },
-  breakBtn:           { width:'100%', padding:'8px 12px', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', color:'rgba(255,255,255,0.75)', borderRadius:'8px', fontSize:'12px', cursor:'pointer', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  breakMax:           { fontSize:'10px', color:'rgba(255,255,255,0.4)', background:'rgba(0,0,0,0.2)', padding:'2px 6px', borderRadius:'10px' },
-  activeBreakCard:    { background:'rgba(255,255,255,0.05)', borderRadius:'8px', padding:'10px', marginBottom:'8px', textAlign:'center', border:'1px solid rgba(255,255,255,0.1)' },
-  activeBreakType:    { margin:'0 0 4px', color:'rgba(255,255,255,0.6)', fontSize:'11px', textTransform:'capitalize' },
-  activeBreakTimer:   { margin:'0 0 2px', fontSize:'26px', fontWeight:'700' },
-  activeBreakLimit:   { margin:0, fontSize:'10px', color:'rgba(255,255,255,0.35)' },
-  endBreakBtn:        { width:'100%', padding:'10px', background:'rgba(232,140,48,0.15)', color:'#e88c30', border:'1px solid rgba(232,140,48,0.3)', borderRadius:'8px', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
-  main:               { flex:1, padding:'2rem', overflowY:'auto' },
-  topBar:             { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
-  topBarRight:        { display:'flex', alignItems:'center', gap:'12px' },
-  welcome:            { fontSize:'24px', fontWeight:'700', color:'#1a1a2e', margin:0 },
-  profileWrap:        { position:'relative' },
-  profileAvatarBtn:   { width:'40px', height:'40px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', fontWeight:'700', fontSize:'16px', cursor:'pointer', boxShadow:'0 4px 12px rgba(83,74,183,0.35)', display:'flex', alignItems:'center', justifyContent:'center' },
-  profileCard:        { position:'absolute', top:'48px', right:0, width:'250px', background:'#fff', border:'1px solid #e6ebf2', borderRadius:'12px', padding:'12px', boxShadow:'0 10px 28px rgba(30,41,59,0.18)', zIndex:20 },
-  profileHeader:      { display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px' },
-  profileAvatarLarge: { width:'38px', height:'38px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'700' },
-  profileName:        { margin:0, fontSize:'14px', fontWeight:'700', color:'#1a1a2e' },
-  profileRole:        { margin:0, fontSize:'11px', color:'#64748b', textTransform:'capitalize' },
-  profileEmail:       { margin:0, fontSize:'12px', color:'#334155', wordBreak:'break-all' },
-  profileActions:     { marginTop:'10px', display:'grid', gap:'6px' },
-  profileBtn:         { width:'100%', padding:'8px 10px', borderRadius:'8px', border:'1px solid #d7e3f4', background:'#f8fbff', color:'#2d6bcf', fontSize:'12px', fontWeight:'600', cursor:'pointer' },
-  profileBtnDanger:   { width:'100%', padding:'8px 10px', borderRadius:'8px', border:'1px solid #ffd8d8', background:'#fff5f5', color:'#e53e3e', fontSize:'12px', fontWeight:'600', cursor:'pointer' },
+  layout:             { display:'flex', minHeight:'100vh', background:'#f1f5f9' },
+
+  // Icon sidebar
+  sidebar:            { width:'80px', background:'linear-gradient(180deg, #2d3748 0%, #1a202c 100%)', display:'flex', flexDirection:'column', justifyContent:'space-between', padding:'1.5rem 0', flexShrink:0, alignItems:'center', boxShadow:'2px 0 12px rgba(0,0,0,0.15)' },
+  sidebarLogo:        { width:'56px', height:'56px', marginBottom:'2rem', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.1)', borderRadius:'12px', padding:'8px' },
+  sidebarLogoImg:     { width:'100%', height:'100%', objectFit:'contain', filter:'brightness(1.1)' },
+  navBtn:             { display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', width:'100%', padding:'12px 0', background:'transparent', border:'none', color:'rgba(255,255,255,0.75)', fontSize:'10px', cursor:'pointer', borderLeft:'3px solid transparent', transition:'background 0.2s ease, color 0.2s ease' },
+  navBtnHover:        { background:'rgba(255,255,255,0.08)', color:'#fff' },
+  navBtnActive:       { background:'rgba(59,130,246,0.2)', color:'#fff', borderLeft:'3px solid #60a5fa' },
+  navIcon:            { fontSize:'20px' },
+  navLabel:           { fontSize:'9px', textAlign:'center', lineHeight:'1.2' },
+  logoutBtn:          { display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', width:'100%', padding:'12px 0', background:'transparent', border:'none', color:'rgba(255,255,255,0.6)', fontSize:'10px', cursor:'pointer', transition:'color 0.2s ease, background 0.2s ease' },
+  logoutBtnHover:     { color:'#f87171', background:'rgba(248,113,113,0.1)' },
+
+  // Profile sidebar
+  profileSidebar:     { width:'220px', background:'#fff', borderRight:'1px solid #e2e8f0', display:'flex', flexDirection:'column', alignItems:'center', padding:'1.5rem 1rem', flexShrink:0, overflowY:'auto' },
+  avatarWrap:         { marginBottom:'1rem' },
+  avatarCircle:       { width:'80px', height:'80px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'700', color:'#fff', boxShadow:'0 8px 24px rgba(83,74,183,0.3)' },
+  profileName:        { margin:'0 0 4px', fontSize:'20px', fontWeight:'800', color:'#111827', textAlign:'center', lineHeight:'1.1' },
+  profileId:          { margin:'0 0 8px', fontSize:'12px', color:'#6b7280', textAlign:'center' },
+  profileDesignation: { margin:'0 0 14px', fontSize:'13px', color:'#374151', textAlign:'center', fontWeight:'600' },
+  profileStatus:      { margin:'0 0 12px', fontSize:'13px', fontWeight:'700' },
+  timerRow:           { display:'flex', alignItems:'center', gap:'4px', marginBottom:'1rem' },
+  timerBox:           { background:'#f1f5f9', borderRadius:'6px', padding:'6px 10px', fontSize:'20px', fontWeight:'700', color:'#1a1a2e', fontVariantNumeric:'tabular-nums', minWidth:'44px', textAlign:'center' },
+  timerSep:           { fontSize:'20px', fontWeight:'700', color:'#94a3b8' },
+  profileDivider:     { width:'100%', height:'1px', background:'#e2e8f0', margin:'0.75rem 0' },
+  reportingWrap:      { width:'100%', textAlign:'center', padding:'0 0.25rem' },
+  reportingLabel:     { margin:'0 0 4px', fontSize:'11px', color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.08em' },
+  reportingValue:     { margin:0, fontSize:'13px', fontWeight:'600', color:'#1f2937' },
+  breakSectionLabel:  { margin:'0 0 6px', fontSize:'11px', color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', alignSelf:'flex-start' },
+  breakBtn:           { width:'100%', padding:'7px 10px', background:'#f1f5f9', border:'1px solid #e2e8f0', color:'#334155', borderRadius:'8px', fontSize:'12px', cursor:'pointer', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center' },
+  breakMax:           { fontSize:'10px', color:'#94a3b8', background:'#e2e8f0', padding:'2px 6px', borderRadius:'8px' },
+  activeBreakWrap:    { width:'100%', background:'#fff9e6', borderRadius:'8px', padding:'10px', textAlign:'center' },
+  activeBreakLabel:   { margin:'0 0 8px', fontSize:'13px', fontWeight:'600', color:'#b7791f' },
+  endBreakBtn:        { width:'100%', padding:'8px', background:'#e88c30', color:'#fff', border:'none', borderRadius:'8px', fontSize:'12px', fontWeight:'600', cursor:'pointer' },
+  changePassBtn:      { width:'100%', marginTop:'auto', padding:'8px', background:'#f1f5f9', border:'1px solid #e2e8f0', color:'#64748b', borderRadius:'8px', fontSize:'12px', cursor:'pointer' },
+
+  // Main
+  main:               { flex:1, padding:'1.5rem', overflowY:'auto' },
   msgBox:             { padding:'10px 16px', borderRadius:'8px', marginBottom:'1rem', fontSize:'14px' },
-  profileHeroCard:    { background:'#fff', borderRadius:'16px', padding:'1.5rem 2rem', marginBottom:'1.5rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:'2rem' },
-  profileHeroInitial: { width:'80px', height:'80px', borderRadius:'50%', background:'linear-gradient(135deg,#7F77DD,#534AB7)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'700', color:'#fff', flexShrink:0, boxShadow:'0 8px 24px rgba(83,74,183,0.3)' },
-  profileHeroInfo:    { flex:1 },
-  profileHeroId:      { margin:'0 0 4px', fontSize:'17px', fontWeight:'700', color:'#1a1a2e' },
-  profileHeroTitle:   { margin:'0 0 6px', fontSize:'13px', color:'#64748b' },
-  profileHeroStatus:  { margin:'0 0 12px', fontSize:'13px', fontWeight:'600' },
-  timerWrap:          { display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' },
-  timerBlock:         { background:'#f0f2f5', borderRadius:'8px', padding:'8px 14px', minWidth:'58px', textAlign:'center' },
-  timerNum:           { fontSize:'26px', fontWeight:'700', color:'#1a1a2e', fontVariantNumeric:'tabular-nums', letterSpacing:'2px' },
-  timerColon:         { fontSize:'26px', fontWeight:'700', color:'#94a3b8' },
-  timerLabel:         { margin:0, fontSize:'11px', color:'#94a3b8' },
-  statsRow:           { display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'1rem', marginBottom:'1.5rem' },
-  statCard:           { background:'#fff', padding:'1.25rem', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', textAlign:'center' },
-  statNum:            { margin:'0 0 4px', fontSize:'20px', fontWeight:'700', color:'#2d6bcf' },
-  statLabel:          { margin:0, color:'#888', fontSize:'12px' },
-  card:               { background:'#fff', padding:'1.5rem', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', marginBottom:'1.5rem' },
-  cardTitle:          { margin:'0 0 1rem', fontSize:'17px', fontWeight:'600', color:'#1a1a2e' },
+
+  // Home Grid
+  homeGrid:           { display:'grid', gridTemplateColumns:'1fr 1fr 280px', gridTemplateRows:'auto auto', gap:'1rem' },
+  timesheetCard:      { background:'#fff', borderRadius:'16px', padding:'1.25rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', display:'flex', flexDirection:'column', alignItems:'center' },
+  timesheetHeader:    { display:'flex', justifyContent:'space-between', width:'100%', marginBottom:'8px' },
+  timesheetTitle:     { fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
+  timesheetDate:      { fontSize:'12px', color:'#94a3b8' },
+  punchInTime:        { fontSize:'12px', color:'#64748b', marginBottom:'8px' },
+  circleWrap:         { margin:'0.5rem 0' },
+  punchInBtn:         { padding:'10px 32px', background:'linear-gradient(135deg,#22c55e,#16a34a)', color:'#fff', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'600', cursor:'pointer', marginBottom:'1rem' },
+  punchOutBtn:        { padding:'10px 32px', background:'linear-gradient(135deg,#3b82f6,#2563eb)', color:'#fff', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'600', cursor:'pointer', marginBottom:'1rem' },
+  doneChip:           { padding:'8px 24px', background:'#e1f5ee', color:'#085041', borderRadius:'8px', fontSize:'13px', fontWeight:'600', marginBottom:'1rem' },
+  onBreakChip:        { padding:'8px 24px', background:'#fff9e6', color:'#b7791f', borderRadius:'8px', fontSize:'13px', fontWeight:'600', marginBottom:'1rem' },
+  timesheetFooter:    { display:'flex', gap:'2rem', marginTop:'4px' },
+  timesheetStat:      { textAlign:'center' },
+  timesheetStatLabel: { margin:'0 0 2px', fontSize:'10px', color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em' },
+  timesheetStatVal:   { margin:0, fontSize:'14px', fontWeight:'700', color:'#1a1a2e' },
+
+  statsCard:          { background:'#fff', borderRadius:'16px', padding:'1.25rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' },
+  statsTitle:         { margin:'0 0 1rem', fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
+  statRow:            { marginBottom:'1rem' },
+  statRowLeft:        { display:'flex', justifyContent:'space-between', marginBottom:'4px' },
+  statRowLabel:       { fontSize:'13px', color:'#334155' },
+  statRowVal:         { fontSize:'13px', color:'#64748b' },
+  progressBar:        { height:'6px', background:'#e2e8f0', borderRadius:'3px', overflow:'hidden' },
+  progressFill:       { height:'100%', borderRadius:'3px', transition:'width 0.5s ease' },
+
+  activityCard:       { background:'#fff', borderRadius:'16px', padding:'1.25rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', gridRow:'1', gridColumn:'3' },
+  activityTitle:      { margin:'0 0 1rem', fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
+  timeline:           { display:'flex', flexDirection:'column', gap:'12px' },
+  timelineItem:       { display:'flex', alignItems:'center', gap:'10px' },
+  timelineDot:        { width:'10px', height:'10px', borderRadius:'50%', flexShrink:0 },
+  timelineLabel:      { margin:0, fontSize:'13px', fontWeight:'600', color:'#1a1a2e' },
+  timelineTime:       { margin:0, fontSize:'11px', color:'#94a3b8' },
+
+  attendanceListCard: { background:'#fff', borderRadius:'16px', padding:'1.25rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', gridColumn:'1 / 3' },
+  chartCard:          { background:'#fff', borderRadius:'16px', padding:'1.25rem', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', gridColumn:'3' },
+  chartTitle:         { margin:'0 0 1rem', fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
+
+  card:               { background:'#fff', padding:'1.5rem', borderRadius:'16px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', marginBottom:'1rem' },
+  cardTitle:          { margin:'0 0 1rem', fontSize:'16px', fontWeight:'700', color:'#1a1a2e' },
   cardHeader:         { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' },
-  addBtn:             { padding:'8px 16px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'13px', fontWeight:'600' },
+  exportBtn:          { padding:'7px 14px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'12px', fontWeight:'600' },
   table:              { width:'100%', borderCollapse:'collapse' },
-  thead:              { background:'#f8f9fa' },
-  th:                 { padding:'10px 14px', textAlign:'left', fontSize:'12px', fontWeight:'600', color:'#555', borderBottom:'1px solid #eee' },
-  tr:                 { borderBottom:'1px solid #f0f0f0' },
-  td:                 { padding:'10px 14px', fontSize:'13px', color:'#333' },
+  thead:              { background:'#f8fafc' },
+  th:                 { padding:'10px 12px', textAlign:'left', fontSize:'11px', fontWeight:'600', color:'#64748b', borderBottom:'1px solid #e2e8f0', textTransform:'uppercase', letterSpacing:'0.05em' },
+  tr:                 { borderBottom:'1px solid #f1f5f9' },
+  td:                 { padding:'10px 12px', fontSize:'13px', color:'#334155' },
   badge:              { padding:'3px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'500' },
-  leaveForm:          { background:'#f8f9fa', padding:'1.25rem', borderRadius:'10px', marginBottom:'1.5rem' },
+  leaveForm:          { background:'#f8fafc', padding:'1.25rem', borderRadius:'10px', marginBottom:'1.5rem' },
+  bookingForm:        { background:'#f8fafc', padding:'1.25rem', borderRadius:'10px', marginBottom:'1.5rem' },
+  roomGrid:           { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:'1rem' },
+  roomCard:           { border:'1px solid #e2e8f0', borderRadius:'16px', padding:'1rem', display:'flex', flexDirection:'column', gap:'0.75rem', textAlign:'left', cursor:'pointer', transition:'all 0.2s ease' },
+  roomTitle:          { fontSize:'15px', fontWeight:'700', color:'#1f2937' },
+  roomMeta:           { fontSize:'12px', color:'#64748b' },
+  roomStats:          { display:'flex', justifyContent:'space-between', gap:'0.5rem', fontSize:'12px', color:'#475569', fontWeight:'600' },
+  slotSummary:        { display:'flex', flexWrap:'wrap', gap:'6px', marginTop:'0.5rem' },
+  slotBadge:          { background:'#eef2ff', color:'#3730a3', fontSize:'11px', padding:'4px 8px', borderRadius:'999px' },
+  cancelBtn:          { padding:'6px 12px', background:'#f8fafc', border:'1px solid #cbd5e1', borderRadius:'8px', color:'#1f2937', cursor:'pointer', fontSize:'12px' },
+  roomHeaderActions:  { display:'flex', alignItems:'flex-end', gap:'0.75rem' },
+  subtitle:           { fontSize:'12px', color:'#64748b' },
   formRow:            { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1rem' },
   formField:          { marginBottom:'0.75rem' },
-  formLabel:          { display:'block', fontSize:'12px', fontWeight:'500', color:'#555', marginBottom:'4px' },
+  formLabel:          { display:'block', fontSize:'12px', fontWeight:'500', color:'#64748b', marginBottom:'4px' },
   formInput:          { width:'100%', padding:'8px 12px', border:'1.5px solid #e2e8f0', borderRadius:'8px', fontSize:'13px', outline:'none', boxSizing:'border-box' },
-  submitBtn:          { padding:'10px 24px', background:'#2d6bcf', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'14px', fontWeight:'600' },
+  submitBtn:          { padding:'10px 24px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'14px', fontWeight:'600' },
 }
