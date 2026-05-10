@@ -32,14 +32,20 @@ module Api
       end
 
       def me
-        render json: {
-          id:            current_user.id,
-          name:          current_user.name,
-          email:         current_user.email,
-          role:          current_user.role,
-          department_id: current_user.department_id
-        }, status: :ok
-      end
+  render json: {
+    id:            current_user.id,
+    employee_id:   current_user.employee_id,
+    name:          current_user.name,
+    email:         current_user.email,
+    role:          current_user.role,
+    job_title:     current_user.job_title,
+    department_id: current_user.department_id,
+    department:    current_user.department&.name,
+    manager:       current_user.department&.manager&.name,
+    manager_id:    current_user.department&.manager&.employee_id,
+    joined_at:     current_user.joined_at
+  }, status: :ok
+end
 
       def change_password
         current_password = params[:current_password].to_s

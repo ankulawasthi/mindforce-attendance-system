@@ -119,6 +119,23 @@ end
 
 puts "✅ Sample employees created"
 
+# Create sample meeting rooms
+[
+  { name: 'Orchid', capacity: 4, location: '1st Floor', description: 'Private room for focused discussions' },
+  { name: 'Lotus', capacity: 8, location: '2nd Floor', description: 'Whiteboard-equipped team space' },
+  { name: 'Tulip', capacity: 12, location: '3rd Floor', description: 'Medium conference room with screen' },
+  { name: 'Maple', capacity: 16, location: 'Ground Floor', description: 'Large room for town halls and workshops' }
+].each do |room|
+  MeetingRoom.find_or_create_by!(name: room[:name]) do |meeting_room|
+    meeting_room.capacity = room[:capacity]
+    meeting_room.location = room[:location]
+    meeting_room.description = room[:description]
+    meeting_room.is_active = true
+  end
+end
+
+puts "✅ Sample meeting rooms created"
+
 # Add holidays
 [
   { name: "New Year",         date: Date.new(2026, 1, 1),   is_optional: false },
@@ -145,4 +162,34 @@ puts "Directors   : #{User.director.count}"
 puts "Managers    : #{User.manager.count}"
 puts "Employees   : #{User.employee.count}"
 puts "Holidays    : #{Holiday.count}"
+# Meeting Rooms
+MeetingRoom.find_or_create_by!(name: "Conference Room A") do |r|
+  r.capacity  = 10
+  r.location  = "Floor 1"
+  r.amenities = "Projector, Whiteboard, AC"
+  r.is_active = true
+end
+
+MeetingRoom.find_or_create_by!(name: "Conference Room B") do |r|
+  r.capacity  = 6
+  r.location  = "Floor 2"
+  r.amenities = "TV Screen, Whiteboard"
+  r.is_active = true
+end
+
+MeetingRoom.find_or_create_by!(name: "Board Room") do |r|
+  r.capacity  = 20
+  r.location  = "Floor 3"
+  r.amenities = "Projector, Video Conference, AC, Whiteboard"
+  r.is_active = true
+end
+
+MeetingRoom.find_or_create_by!(name: "Huddle Space") do |r|
+  r.capacity  = 4
+  r.location  = "Floor 1"
+  r.amenities = "TV Screen"
+  r.is_active = true
+end
+
+puts "✅ #{MeetingRoom.count} Meeting Rooms created"
 puts "--- Done! ---"

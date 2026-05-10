@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -76,6 +76,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_120000) do
     t.index ["user_id"], name: "index_leave_requests_on_user_id"
   end
 
+  create_table "meeting_rooms", force: :cascade do |t|
+    t.integer "capacity", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.boolean "is_active", default: true, null: false
+    t.string "location"
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_meeting_rooms_on_name", unique: true
+  end
+
+  create_table "room_bookings", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.date "date", null: false
+    t.time "end_time", null: false
+    t.bigint "meeting_room_id", null: false
+    t.string "purpose", null: false
+    t.time "start_time", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["meeting_room_id", "date", "start_time", "end_time"], name: "index_room_bookings_on_room_date_time"
+    t.index ["meeting_room_id"], name: "index_room_bookings_on_meeting_room_id"
+    t.index ["user_id"], name: "index_room_bookings_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "department_id"
@@ -93,4 +118,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_120000) do
     t.index ["employee_id"], name: "index_users_on_employee_id", unique: true
     t.index ["role"], name: "index_users_on_role"
   end
+
+  add_foreign_key "room_bookings", "meeting_rooms"
+  add_foreign_key "room_bookings", "users"
 end

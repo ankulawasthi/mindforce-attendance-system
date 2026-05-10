@@ -1,19 +1,20 @@
 Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
-      # Auth
+
+      # ---------------- AUTH ----------------
       post   "auth/login",  to: "auth#login"
       delete "auth/logout", to: "auth#logout"
       get    "auth/me",     to: "auth#me"
       patch  "auth/change_password", to: "auth#change_password"
 
-      # Departments
+      # ---------------- DEPARTMENTS ----------------
       resources :departments, only: [:index, :show, :create, :update]
 
-      # Users
+      # ---------------- USERS ----------------
       resources :users, only: [:index, :show, :create, :update, :destroy]
 
-      # Attendance
+      # ---------------- ATTENDANCE ----------------
       resources :attendances, only: [:index, :show, :create, :update] do
         collection do
           post :clock_in
@@ -23,14 +24,14 @@ Rails.application.routes.draw do
         end
       end
 
-      # Breaks
+      # ---------------- BREAKS ----------------
       resources :breaks, only: [:index, :create, :update] do
-  collection do
-    get :department_summary
-  end
-end
+        collection do
+          get :department_summary
+        end
+      end
 
-      # Leave Requests
+      # ---------------- LEAVE REQUESTS ----------------
       resources :leave_requests, only: [:index, :show, :create, :update] do
         member do
           patch :approve
@@ -38,14 +39,22 @@ end
         end
       end
 
-      # Reports
+      # ---------------- MEETING ROOMS ----------------
+      resources :meeting_rooms, only: [:index, :show, :create, :update]
+
+      # ---------------- ROOM BOOKINGS ----------------
+      resources :room_bookings, only: [:index, :create, :destroy]
+
+      # ---------------- REPORTS ----------------
       namespace :reports do
         get :attendance
         get :leaves
         get :department_summary
       end
+
     end
   end
 
+  # ---------------- HEALTH CHECK ----------------
   get "up" => "rails/health#show", as: :rails_health_check
 end

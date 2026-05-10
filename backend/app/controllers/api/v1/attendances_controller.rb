@@ -5,13 +5,13 @@ module Api
       # GET /api/v1/attendances/today
       def today
         attendances = if current_user.director?
-          Attendance.includes(:user).where(date: Date.today)
+          Attendance.includes(:user, :breaks).where(date: Date.today)
         elsif current_user.manager?
-          Attendance.includes(:user)
+          Attendance.includes(:user, :breaks)
                     .where(date: Date.today)
                     .for_department(current_user.department_id)
         else
-          Attendance.where(user_id: current_user.id, date: Date.today)
+          Attendance.includes(:breaks).where(user_id: current_user.id, date: Date.today)
         end
 
         render json: attendances.map { |a| attendance_json(a) }, status: :ok
@@ -20,13 +20,13 @@ module Api
       # GET /api/v1/attendances
       def index
         attendances = if current_user.director?
-          Attendance.includes(:user).order(date: :desc)
+          Attendance.includes(:user, :breaks).order(date: :desc)
         elsif current_user.manager?
-          Attendance.includes(:user)
+          Attendance.includes(:user, :breaks)
                     .for_department(current_user.department_id)
                     .order(date: :desc)
         else
-          Attendance.where(user_id: current_user.id).order(date: :desc)
+          Attendance.includes(:breaks).where(user_id: current_user.id).order(date: :desc)
         end
 
         attendances = attendances.for_date(params[:date]) if params[:date].present?
@@ -207,15 +207,17 @@ end
 
       def attendance_json(attendance)
         {
-          id:          attendance.id,
-          user_id:     attendance.user_id,
-          user_name:   attendance.user&.name,
-          date:        attendance.date,
-          clock_in:    attendance.clock_in,
-          clock_out:   attendance.clock_out,
-          status:      attendance.status,
-          total_hours: attendance.total_hours,
-          ip_address:  attendance.ip_address
+          id:                 attendance.id,
+          user_id:            attendance.user_id,
+          user_name:          attendance.user&.name,
+          date:               attendance.date,
+          clock_in:           attendance.clock_in,
+          clock_out:          attendance.clock_out,
+          status:             attendance.status,
+          total_hours:        attendance.total_hours,
+          total_break_mins:  total_break,
+          breaks:             attendance.breaks.map { |b| { duration_mins: b.duration_mins || 0 } },
+          ip_address:         attendance.ip_address
         }
       end
     end
