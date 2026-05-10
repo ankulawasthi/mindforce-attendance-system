@@ -8,8 +8,9 @@ class RoomBooking < ApplicationRecord
   validates :date,       presence: true
   validates :start_time, presence: true
   validates :end_time,   presence: true
-  validate  :no_conflict
-  validate  :end_after_start
+
+  validate :end_after_start
+  validate :no_conflict
 
   scope :upcoming, -> { where('date >= ?', Date.today).order(date: :asc) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
@@ -23,6 +24,7 @@ class RoomBooking < ApplicationRecord
 
   def no_conflict
     return unless meeting_room && date && start_time && end_time
+
     conflicts = RoomBooking.where(
       meeting_room_id: meeting_room_id,
       date: date,
