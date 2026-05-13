@@ -206,19 +206,20 @@ end
       end
 
       def attendance_json(attendance)
-        {
-          id:                 attendance.id,
-          user_id:            attendance.user_id,
-          user_name:          attendance.user&.name,
-          date:               attendance.date,
-          clock_in:           attendance.clock_in,
-          clock_out:          attendance.clock_out,
-          status:             attendance.status,
-          total_hours:        attendance.total_hours,
-          total_break_mins:  total_break,
-          breaks:             attendance.breaks.map { |b| { duration_mins: b.duration_mins || 0 } },
-          ip_address:         attendance.ip_address
-        }
+  total_break_mins = attendance.breaks.sum(:duration_mins).to_i
+  {
+    id:               attendance.id,
+    user_id:          attendance.user_id,
+    user_name:        attendance.user&.name,
+    date:             attendance.date,
+    clock_in:         attendance.clock_in,
+    clock_out:        attendance.clock_out,
+    status:           attendance.status,
+    total_hours:      attendance.total_hours,
+    total_break_mins: total_break_mins,
+    ip_address:       attendance.ip_address
+  }
+end
       end
     end
   end
