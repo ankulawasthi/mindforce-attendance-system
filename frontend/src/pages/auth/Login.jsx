@@ -1,192 +1,93 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "../../context/AuthContext"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card"
+import { Button } from "../../components/ui/button"
+import { Input } from "../../components/ui/input"
+import { Fingerprint, Mail, Lock, AlertCircle } from "lucide-react"
 
 export default function Login() {
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const { login }               = useAuth()
-  const navigate                = useNavigate()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const { login } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
+    setError("")
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/dashboard')
+      navigate("/dashboard")
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid email or password')
+      setError(err.response?.data?.error || "Invalid email or password")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        {/* Fingerprint Icon */}
-        <div style={styles.iconWrap}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
-            <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
-            <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
-            <path d="M2 12a10 10 0 0 1 18-6"/>
-            <path d="M2 17.5a14.5 14.5 0 0 0 4.56 5.5"/>
-            <path d="M6 10.5A7.5 7.5 0 0 1 19 10"/>
-            <path d="M6.5 17.5A16 16 0 0 0 8 20"/>
-            <path d="M9 14.5A7 7 0 0 0 9.1 17"/>
-          </svg>
-        </div>
-
-        <h2 style={styles.title}>Attendance System</h2>
-        <p style={styles.subtitle}>Smart Employee Tracking</p>
-
-        {error && (
-          <div style={styles.error}>
-            <span>⚠️</span> {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div style={styles.field}>
-            <label style={styles.label}>Email Address</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon}>✉️</span>
-              <input
-                style={styles.input}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-              />
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="w-full max-w-sm">
+        <Card className="border-slate-200 shadow-md">
+          <CardHeader className="space-y-4 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 shadow-sm">
+              <Fingerprint className="h-8 w-8 text-white" />
             </div>
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label}>Password</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon}>🔒</span>
-              <input
-                style={styles.input}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
+            <div className="space-y-1">
+              <CardTitle className="text-2xl">Attendance System</CardTitle>
+              <CardDescription>Sign in to your account</CardDescription>
             </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ ...styles.button, opacity: loading ? 0.8 : 1 }}
-          >
-            {loading ? 'Signing in...' : '→ Sign In'}
-          </button>
-        </form>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <div className="mb-4 flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                <p>{error}</p>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none text-slate-700">Email Address</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <Mail className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <Input
+                    type="email"
+                    className="pl-9"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none text-slate-700">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <Input
+                    type="password"
+                    className="pl-9"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
-}
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'linear-gradient(135deg, #1a8a7a 0%, #2d6bcf 50%, #6b3fcf 100%)',
-  },
-  card: {
-    background: '#ffffff',
-    padding: '2.5rem 2rem',
-    borderRadius: '16px',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-    width: '100%',
-    maxWidth: '380px',
-    textAlign: 'center',
-  },
-  iconWrap: {
-    width: '70px',
-    height: '70px',
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #1a8a7a, #2d6bcf)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 1.25rem',
-    boxShadow: '0 8px 24px rgba(45,107,207,0.35)',
-  },
-  title: {
-    margin: '0 0 6px',
-    fontSize: '22px',
-    fontWeight: '700',
-    color: '#1a1a2e',
-  },
-  subtitle: {
-    margin: '0 0 1.75rem',
-    fontSize: '13px',
-    color: '#888',
-  },
-  error: {
-    background: '#fff0f0',
-    color: '#e53e3e',
-    padding: '10px 14px',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-    fontSize: '13px',
-    textAlign: 'left',
-  },
-  field: {
-    marginBottom: '1.25rem',
-    textAlign: 'left',
-  },
-  label: {
-    display: 'block',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#444',
-    marginBottom: '6px',
-  },
-  inputWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    border: '1.5px solid #e2e8f0',
-    borderRadius: '8px',
-    overflow: 'hidden',
-    background: '#f9fafb',
-  },
-  inputIcon: {
-    padding: '0 12px',
-    fontSize: '15px',
-    background: '#f9fafb',
-  },
-  input: {
-    flex: 1,
-    padding: '11px 12px 11px 0',
-    border: 'none',
-    outline: 'none',
-    fontSize: '14px',
-    background: '#f9fafb',
-    color: '#1a1a2e',
-    width: '100%',
-  },
-  button: {
-    width: '100%',
-    padding: '13px',
-    background: 'linear-gradient(135deg, #2d6bcf, #6b3fcf)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '15px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginTop: '0.5rem',
-    letterSpacing: '0.3px',
-  },
-}
+}

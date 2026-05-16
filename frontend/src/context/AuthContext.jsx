@@ -9,13 +9,24 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token')
-    const savedUser  = localStorage.getItem('user')
-    if (savedToken && savedUser) {
-      setToken(savedToken)
-      setUser(JSON.parse(savedUser))
+    const initAuth = async () => {
+      const savedToken = localStorage.getItem('token')
+      const savedUser  = localStorage.getItem('user')
+      if (savedToken) {
+        setToken(savedToken)
+        if (savedUser) setUser(JSON.parse(savedUser)) // optimistic load
+        
+        try {
+          const res = await api.get('/auth/me')
+          setUser(res.data)
+          localStorage.setItem('user', JSON.stringify(res.data))
+        } catch (err) {
+          console.error("Failed to hydrate user session")
+        }
+      }
+      setLoading(false)
     }
-    setLoading(false)
+    initAuth()
   }, [])
 
   const login = async (email, password) => {

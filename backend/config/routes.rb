@@ -24,6 +24,11 @@ Rails.application.routes.draw do
         end
       end
 
+      # Legacy / Alias routes for attendance
+      get "attendance", to: "attendances#index"
+      post "attendance/check_in", to: "attendances#clock_in"
+      post "attendance/check_out", to: "attendances#clock_out"
+
       # ---------------- BREAKS ----------------
       resources :breaks, only: [:index, :create, :update] do
         collection do
@@ -43,7 +48,11 @@ Rails.application.routes.draw do
       resources :meeting_rooms, only: [:index, :show, :create, :update]
 
       # ---------------- ROOM BOOKINGS ----------------
-      resources :room_bookings, only: [:index, :create, :destroy]
+      resources :room_bookings, only: [:index, :create, :destroy] do
+        collection do
+          get :utilization
+        end
+      end
 
       # ---------------- REPORTS ----------------
       namespace :reports do

@@ -5,12 +5,11 @@ class Attendance < ApplicationRecord
   enum :status, { present: 0, absent: 1, half_day: 2, late: 3, on_leave: 4 }
 
   # Thresholds based on TOTAL time (including breaks)
-  # Present  = 8 hrs total (with 10 min buffer = 7h 50m)
-  # Half Day = 4 hrs total (with 10 min buffer = 3h 50m)
-  # Absent   = below 4 hrs total
-  BUFFER_MINS          = 10
-  MIN_PRESENT_SECONDS  = (8.hours - BUFFER_MINS.minutes).to_i   # 7h 50m
-  MIN_HALF_DAY_SECONDS = (4.hours - BUFFER_MINS.minutes).to_i   # 3h 50m
+  # Present  = >= 9 hrs
+  # Half Day = >= 4 hrs and < 9 hrs
+  # Absent   = < 4 hrs
+  MIN_PRESENT_SECONDS  = 9.hours.to_i
+  MIN_HALF_DAY_SECONDS = 4.hours.to_i
 
   validates :user_id, presence: true
   validates :date,    presence: true
@@ -22,11 +21,11 @@ class Attendance < ApplicationRecord
 
   def self.status_for_work_seconds(total_seconds)
     if total_seconds >= MIN_PRESENT_SECONDS
-      :present   # 7h 50m+ total time → Full Day
+      :present   # 9h+ total time → Full Day
     elsif total_seconds >= MIN_HALF_DAY_SECONDS
-      :half_day  # 3h 50m–7h 50m total time → Half Day
+      :half_day  # 4h-9h total time → Half Day
     else
-      :absent    # below 3h 50m → Absent
+      :absent    # below 4h → Absent
     end
   end
 end

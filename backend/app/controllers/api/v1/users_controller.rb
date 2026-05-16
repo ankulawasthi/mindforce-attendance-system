@@ -108,7 +108,8 @@ module Api
         params.require(:user).permit(
           :name, :email, :password,
           :role, :department_id,
-          :joined_at, :employee_id, :job_title
+          :joined_at, :employee_id, :job_title, :shift_timing,
+          :employment_type, :work_mode
         )
       end
 
@@ -121,25 +122,33 @@ module Api
             :name, :email, :password,
             :role, :department_id,
             :joined_at, :employee_id,
-            :job_title, :is_active
+            :job_title, :is_active,
+            :profile_photo_url, :mobile_number, :address,
+            :emergency_contact, :personal_email, :shift_timing,
+            :employment_type, :work_mode
           )
         when 'manager'
           if current_user.id == @user.id
             # Manager updating own profile
             params.require(:user).permit(
-              :name, :email, :password, :job_title
+              :name, :email, :password, :job_title,
+              :profile_photo_url, :mobile_number, :address,
+              :emergency_contact, :personal_email
             )
           else
             # Manager updating dept employee
             params.require(:user).permit(
               :name, :email, :job_title,
-              :joined_at, :employee_id, :is_active
+              :joined_at, :employee_id, :is_active,
+              :role, :department_id, :shift_timing
             )
           end
         when 'employee'
           # Employee can only update basic profile fields
           params.require(:user).permit(
-            :name, :email, :password, :job_title
+            :name, :password,
+            :profile_photo_url, :mobile_number, :address,
+            :emergency_contact, :personal_email
           )
         end
       end
@@ -148,16 +157,24 @@ module Api
 
       def user_json(user)
         {
-          id:            user.id,
-          employee_id:   user.employee_id,
-          name:          user.name,
-          email:         user.email,
-          role:          user.role,
-          job_title:     user.job_title,
-          department_id: user.department_id,
-          department:    user.department&.name,
-          is_active:     user.is_active,
-          joined_at:     user.joined_at
+          id:                user.id,
+          employee_id:       user.employee_id,
+          name:              user.name,
+          email:             user.email,
+          role:              user.role,
+          job_title:         user.job_title,
+          department_id:     user.department_id,
+          department:        user.department&.name,
+          is_active:         user.is_active,
+          joined_at:         user.joined_at,
+          profile_photo_url: user.profile_photo_url,
+          mobile_number:     user.mobile_number,
+          address:           user.address,
+          emergency_contact: user.emergency_contact,
+          personal_email:    user.personal_email,
+          shift_timing:      user.shift_timing,
+          employment_type:   user.employment_type,
+          work_mode:         user.work_mode
         }
       end
     end

@@ -23,6 +23,27 @@ module Api
         render json: bookings.map { |b| booking_json(b) }, status: :ok
       end
 
+      # GET /api/v1/room_bookings/utilization
+      def utilization
+        unless current_user.director?
+          return render json: { error: "Director access required" }, status: :forbidden
+        end
+
+        rooms = MeetingRoom.all
+        stats = rooms.map do |room|
+          bookings = room.room_bookings.where(date: Date.today)
+          {
+            room_id: room.id,
+            room_name: room.name,
+            total_bookings: bookings.count,
+            occupied_mins: bookings.sum { |b| ((b.end_time - b.start_time) / 60).to_i }
+          }
+        end
+
+        render json: stats, status: :ok
+      end
+
+
       # POST /api/v1/room_bookings
       def create
         booking = RoomBooking.new(booking_params)
@@ -55,7 +76,9 @@ module Api
       def booking_params
         params.require(:room_booking).permit(
           :meeting_room_id, :title, :date,
-          :start_time, :end_time, :notes
+          :start_time, :end_time, :notes, :purpose,
+          participant_ids: [],
+          recurrence: [:type, :until]
         )
       end
 
@@ -79,7 +102,10 @@ module Api
           start_time:    b.start_time,
           end_time:      b.end_time,
           notes:         b.notes,
-          status:        b.status
+          purpose:       b.purpose,
+          status:        b.status,
+          participant_ids: b.participant_ids,
+          recurrence:    b.recurrence
         }
       end
     end

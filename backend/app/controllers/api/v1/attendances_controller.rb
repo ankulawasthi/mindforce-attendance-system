@@ -67,31 +67,6 @@ module Api
       end
 
       # POST /api/v1/attendances/clock_out
-      # def clock_out
-      #   attendance = Attendance.find_by(user_id: current_user.id, date: Date.today)
-
-      #   if attendance.nil?
-      #     return render json: { error: "You haven't clocked in today" }, status: :unprocessable_entity
-      #   end
-
-      #   if attendance.clock_out.present?
-      #     return render json: { error: "Already clocked out today" }, status: :unprocessable_entity
-      #   end
-
-      #   total_break_mins  = attendance.breaks.sum(:duration_mins) || 0
-      #   total_work_seconds = Time.current - attendance.clock_in
-      #   net_work_seconds  = [total_work_seconds - (total_break_mins * 60), 0].max
-      #   work_hours        = (net_work_seconds / 3600.0).round(2)
-      #   attendance_status = Attendance.status_for_work_seconds(net_work_seconds)
-
-      #   attendance.update(
-      #     clock_out:   Time.current,
-      #     total_hours: work_hours,
-      #     status:      attendance_status
-      #   )
-
-      #   render json: attendance_json(attendance), status: :ok
-      # end
       def clock_out
         attendance = Attendance.find_by(user_id: current_user.id, date: Date.today)
       
@@ -103,22 +78,19 @@ module Api
           return render json: { error: "Already checked out today" }, status: :unprocessable_entity
         end
       
-        total_break_mins  = attendance.breaks.sum(:duration_mins) || 0
-        
-        # Total time = check_out - check_in (INCLUDING breaks)
-        total_seconds     = (Time.current - attendance.clock_in).to_i
-        
-        # Net work hours = total time - break time (for display only)
-        work_seconds      = total_seconds - (total_break_mins * 60)
-        work_hours        = (work_seconds / 3600.0).round(2)
+        total_break_mins = attendance.breaks.sum(:duration_mins) || 0
+        total_seconds    = (Time.current - attendance.clock_in).to_i
+        work_seconds     = total_seconds - (total_break_mins * 60)
+        work_hours       = (work_seconds / 3600.0).round(2)
       
-        # Status based on TOTAL time INCLUDING breaks
         status = Attendance.status_for_work_seconds(total_seconds)
+        idle_seconds = params[:idle_seconds].to_i
       
         attendance.update(
-          clock_out:   Time.current,
-          total_hours: work_hours,
-          status:      status
+          clock_out:    Time.current,
+          total_hours:  work_hours,
+          status:       status,
+          idle_seconds: idle_seconds
         )
       
         message = case status
@@ -129,21 +101,21 @@ module Api
       
         render json: attendance_json(attendance).merge({ message: message }), status: :ok
       end
-    # GET /api/v1/attendances/export
-def export
-  attendances = scoped_attendances
-  attendances = apply_date_filters(attendances)
 
-  csv_data = generate_csv(attendances)
+      # GET /api/v1/attendances/export
+      def export
+        attendances = scoped_attendances
+        attendances = apply_date_filters(attendances)
+        csv_data = generate_csv(attendances)
+        filename = "attendance_#{Date.today.strftime('%Y_%m_%d')}.csv"
 
-  filename = "attendance_#{Date.today.strftime('%Y_%m_%d')}.csv"
+        send_data csv_data,
+          type:        'text/csv; charset=utf-8',
+          disposition: "attachment; filename=#{filename}"
+      end 
 
-  send_data csv_data,
-    type:        'text/csv; charset=utf-8',
-    disposition: "attachment; filename=#{filename}"
-end 
       private
-       
+        
       def scoped_attendances
         case current_user.role
         when 'director'
@@ -166,61 +138,95 @@ end
         attendances
       end
       
+      IST = ActiveSupport::TimeZone["Asia/Kolkata"]
+
+      # Converts total seconds → "HH:MM:SS" string
+      def fmt_duration(total_seconds)
+        return "00:00:00" if total_seconds.nil? || total_seconds <= 0
+        h = total_seconds / 3600
+        m = (total_seconds % 3600) / 60
+        s = total_seconds % 60
+        format("%02d:%02d:%02d", h, m, s)
+      end
+
       def generate_csv(attendances)
-      
         CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
-          # Header row
-          csv << [
-            'Employee ID',
-            'Employee Name',
-            'Department',
-            'Date',
-            'Check In',
-            'Check Out',
-            'Working Hours',
-            'Break Time (mins)',
-            'Status'
-          ]
-      
-          # Data rows
+          csv << ['Date', 'Employee ID', 'Employee Name', 'Department',
+                  'Check In (IST)', 'Check Out (IST)',
+                  'Working Hours', 'Break Time', 'Idle Time', 'Productivity Hours',
+                  'Status']
+
           attendances.each do |a|
-            total_break = a.breaks.sum(:duration_mins) || 0
-      
+            # ── Timestamps in IST ──────────────────────────────────────────
+            ci_ist  = a.clock_in  ? a.clock_in.in_time_zone(IST)  : nil
+            co_ist  = a.clock_out ? a.clock_out.in_time_zone(IST) : nil
+
+            check_in  = ci_ist  ? ci_ist.strftime('%I:%M:%S %p')  : '-'
+            check_out = co_ist  ? co_ist.strftime('%I:%M:%S %p')  : '-'
+
+            # ── Working seconds from raw timestamps (not stored total_hours) ──
+            if ci_ist
+              end_point   = co_ist || Time.current.in_time_zone(IST)
+              work_secs   = [(end_point - ci_ist).to_i, 0].max
+            else
+              work_secs   = 0
+            end
+
+            # ── Break time (already stored as minutes) ──────────────────────
+            total_break_mins = a.breaks.sum(:duration_mins).to_i
+            break_secs       = total_break_mins * 60
+
+            # ── Idle time ───────────────────────────────────────────────────
+            idle_secs = (a.idle_seconds || 0).to_i
+
+            # ── Productivity = Working - Break - Idle ───────────────────────
+            productivity_secs = [0, work_secs - break_secs - idle_secs].max
+
+            # ── Status: mark open sessions as "Active" ──────────────────────
+            status = if co_ist.nil? && ci_ist
+                       "Active"
+                     else
+                       a.status&.humanize || "-"
+                     end
+
             csv << [
+              a.date,
               a.user&.employee_id,
               a.user&.name,
               a.user&.department&.name,
-              a.date,
-              a.clock_in  ? a.clock_in.strftime('%I:%M %p')  : '-',
-              a.clock_out ? a.clock_out.strftime('%I:%M %p') : '-',
-              a.total_hours || 0,
-              total_break,
-              a.status&.humanize
+              check_in,
+              check_out,
+              fmt_duration(work_secs),
+              fmt_duration(break_secs),
+              fmt_duration(idle_secs),
+              fmt_duration(productivity_secs),
+              status
             ]
           end
         end
       end
+
 
       def attendance_params
         params.require(:attendance).permit(:status, :clock_in, :clock_out, :total_hours)
       end
 
       def attendance_json(attendance)
-  total_break_mins = attendance.breaks.sum(:duration_mins).to_i
-  {
-    id:               attendance.id,
-    user_id:          attendance.user_id,
-    user_name:        attendance.user&.name,
-    date:             attendance.date,
-    clock_in:         attendance.clock_in,
-    clock_out:        attendance.clock_out,
-    status:           attendance.status,
-    total_hours:      attendance.total_hours,
-    total_break_mins: total_break_mins,
-    ip_address:       attendance.ip_address
-  }
-end
+        total_break_mins = attendance.breaks.sum(:duration_mins).to_i
+        {
+          id:               attendance.id,
+          user_id:          attendance.user_id,
+          user_name:        attendance.user&.name,
+          date:             attendance.date,
+          clock_in:         attendance.clock_in,
+          clock_out:        attendance.clock_out,
+          status:           attendance.status,
+          total_hours:      attendance.total_hours,
+          total_break_mins: total_break_mins,
+          ip_address:       attendance.ip_address
+        }
       end
-    end
-  end
-end
+      
+    end # End Class
+  end # End V1
+end # End Api

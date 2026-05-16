@@ -38,7 +38,7 @@ module Api
         return render json: { error: "You already have an active break" }, status: :unprocessable_entity if active_break
 
         break_type = params[:break_type] || "short"
-        limit = BREAK_LIMITS[break_type]
+        limit = BREAK_LIMITS[break_type] || {}
 
         # Check count limit
         if limit[:max_count]
@@ -52,7 +52,8 @@ module Api
 
         b = attendance.breaks.new(
           break_start: Time.current,
-          break_type:  break_type
+          break_type:  break_type,
+          reason:      params[:reason]
         )
 
         if b.save
@@ -69,7 +70,7 @@ module Api
         return render json: { error: "Break already ended" }, status: :unprocessable_entity if b.break_end.present?
 
         duration = ((Time.current - b.break_start) / 60).round
-        limit    = BREAK_LIMITS[b.break_type]
+        limit    = BREAK_LIMITS[b.break_type] || {}
         exceeded = limit[:max_duration] && duration > limit[:max_duration]
 
         b.update(
@@ -130,7 +131,8 @@ module Api
           duration_mins: duration,
           is_exceeded:   b.is_exceeded || false,
           max_allowed:   limit[:max_duration],
-          is_active:     b.break_end.nil?
+          is_active:     b.break_end.nil?,
+          reason:        b.reason
         }
       end
     end

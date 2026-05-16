@@ -12,11 +12,21 @@ module Api
             success: true,
             token:   token,
             user: {
-              id:            user.id,
-              name:          user.name,
-              email:         user.email,
-              role:          user.role,
-              department_id: user.department_id
+              id:                user.id,
+              employee_id:       user.employee_id,
+              name:              user.name,
+              email:             user.email,
+              role:              user.role,
+              job_title:         user.job_title,
+              department_id:     user.department_id,
+              department:        user.department&.name,
+              joined_at:         user.joined_at,
+              profile_photo_url: user.profile_photo_url,
+              mobile_number:     user.mobile_number,
+              address:           user.address,
+              emergency_contact: user.emergency_contact,
+              personal_email:    user.personal_email,
+              shift_timing:      user.shift_timing
             }
           }, status: :ok
         else
@@ -32,20 +42,26 @@ module Api
       end
 
       def me
-  render json: {
-    id:            current_user.id,
-    employee_id:   current_user.employee_id,
-    name:          current_user.name,
-    email:         current_user.email,
-    role:          current_user.role,
-    job_title:     current_user.job_title,
-    department_id: current_user.department_id,
-    department:    current_user.department&.name,
-    manager:       current_user.department&.manager&.name,
-    manager_id:    current_user.department&.manager&.employee_id,
-    joined_at:     current_user.joined_at
-  }, status: :ok
-end
+        render json: {
+          id:                current_user.id,
+          employee_id:       current_user.employee_id,
+          name:              current_user.name,
+          email:             current_user.email,
+          role:              current_user.role,
+          job_title:         current_user.job_title,
+          department_id:     current_user.department_id,
+          department:        current_user.department&.name,
+          manager:           current_user.department&.manager&.name,
+          manager_id:        current_user.department&.manager&.employee_id,
+          joined_at:         current_user.joined_at,
+          profile_photo_url: current_user.profile_photo_url,
+          mobile_number:     current_user.mobile_number,
+          address:           current_user.address,
+          emergency_contact: current_user.emergency_contact,
+          personal_email:    current_user.personal_email,
+          shift_timing:      current_user.shift_timing
+        }, status: :ok
+      end
 
       def change_password
         current_password = params[:current_password].to_s

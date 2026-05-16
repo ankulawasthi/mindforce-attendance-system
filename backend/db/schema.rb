@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_180027) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,6 +19,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
     t.datetime "clock_out"
     t.datetime "created_at", null: false
     t.date "date", null: false
+    t.integer "idle_seconds", default: 0
     t.string "ip_address"
     t.integer "status", default: 0, null: false
     t.decimal "total_hours", precision: 5, scale: 2
@@ -37,6 +38,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
     t.datetime "created_at", null: false
     t.integer "duration_mins"
     t.boolean "is_exceeded"
+    t.text "reason"
     t.datetime "updated_at", null: false
     t.index ["attendance_id"], name: "index_breaks_on_attendance_id"
   end
@@ -77,9 +79,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
   end
 
   create_table "meeting_rooms", force: :cascade do |t|
+    t.text "amenities"
     t.integer "capacity", default: 1, null: false
     t.datetime "created_at", null: false
     t.text "description"
+    t.string "email"
     t.boolean "is_active", default: true, null: false
     t.string "location"
     t.string "name", null: false
@@ -92,8 +96,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
     t.date "date", null: false
     t.time "end_time", null: false
     t.bigint "meeting_room_id", null: false
+    t.text "notes"
+    t.jsonb "participant_ids"
     t.string "purpose", null: false
+    t.jsonb "recurrence"
     t.time "start_time", null: false
+    t.integer "status", default: 0, null: false
+    t.string "title"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["meeting_room_id", "date", "start_time", "end_time"], name: "index_room_bookings_on_room_date_time"
@@ -102,17 +111,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_09_111000) do
   end
 
   create_table "users", force: :cascade do |t|
+    t.text "address"
     t.datetime "created_at", null: false
     t.integer "department_id"
     t.string "email", null: false
+    t.string "emergency_contact"
     t.string "employee_id"
+    t.string "employment_type"
     t.boolean "is_active", default: true, null: false
     t.string "job_title"
     t.date "joined_at"
+    t.string "mobile_number"
     t.string "name", null: false
     t.string "password_digest", null: false
+    t.string "personal_email"
+    t.string "profile_photo_url"
     t.integer "role", default: 2, null: false
+    t.string "shift_timing"
     t.datetime "updated_at", null: false
+    t.string "work_mode"
     t.index ["department_id"], name: "index_users_on_department_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["employee_id"], name: "index_users_on_employee_id", unique: true
