@@ -107,18 +107,58 @@ export default function ManagerDashboard() {
         api.get("/users"),
         api.get("/breaks/department_summary"),
       ])
-      setTodayAll(attRes.data)
-      setEmployees(userRes.data.filter((u) => u.role === "employee"))
-      setBreakSummary(breakRes.data)
+      const empsOnly = userRes.data.filter((u) => u.role === "employee")
+      const empIds = empsOnly.map(u => u.id)
+
+      setEmployees(empsOnly)
+
+      // Enrich today's attendance with correct name from userRes
+      const enrichedAtt = attRes.data
+        .filter((a) => empIds.includes(a.user_id))
+        .map((a) => {
+          const emp = empsOnly.find(e => e.id === a.user_id)
+          return {
+            ...a,
+            user_name: emp ? emp.name : a.user_name
+          }
+        })
+      setTodayAll(enrichedAtt)
+
+      // Enrich breaks summary with correct name from userRes
+      const enrichedBreaks = breakRes.data
+        .filter((b) => empIds.includes(b.user_id))
+        .map((b) => {
+          const emp = empsOnly.find(e => e.id === b.user_id)
+          return {
+            ...b,
+            user_name: emp ? emp.name : b.user_name
+          }
+        })
+      setBreakSummary(enrichedBreaks)
     } catch (err) { console.error(err) }
   }
 
   const fetchLeaves = async () => {
     try {
-      const res = await api.get("/leave_requests")
-      const all = res.data
+      const [leaveRes, userRes] = await Promise.all([
+        api.get("/leave_requests"),
+        api.get("/users")
+      ])
+      const empsOnly = userRes.data.filter((u) => u.role === "employee")
+      const all = leaveRes.data
       setMyLeaves(all.filter((l) => l.user_id === user.id))
-      setTeamLeaves(all.filter((l) => l.user_id !== user.id && l.status === "pending"))
+
+      // Only pending leaves for employees, enriched with correct name
+      const pendingLeaves = all
+        .filter((l) => l.user_id !== user.id && l.status === "pending" && l.user_role === "employee")
+        .map((l) => {
+          const emp = empsOnly.find(e => e.id === l.user_id)
+          return {
+            ...l,
+            user_name: emp ? emp.name : l.user_name
+          }
+        })
+      setTeamLeaves(pendingLeaves)
     } catch (err) { console.error(err) }
   }
 

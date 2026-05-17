@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
-import { Plus, Edit2, CheckCircle, AlertCircle, Users, Mail, Briefcase, Hash, Clock, Shield, Building } from "lucide-react"
+import { Plus, Edit2, CheckCircle, AlertCircle, Users, Mail, Briefcase, Hash, Clock, Shield, Building, Calendar } from "lucide-react"
 import api from "../../api/axios"
 import { useAuth } from "../../context/AuthContext"
 import { SHIFT_OPTIONS } from "../../lib/shifts"
@@ -35,7 +35,7 @@ export function EmployeesTab() {
   const fetchEmployees = async () => {
     try {
       const res = await api.get("/users")
-      setEmployees(res.data)
+      setEmployees(res.data.filter((u) => u.role === "employee"))
     } catch (err) {
       console.error(err)
     } finally {
